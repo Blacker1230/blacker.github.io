@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Mac on 李岩</title><link>https://liyan-ah.github.io/tags/mac/</link><description>Recent content in Mac on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Wed, 16 Feb 2022 10:51:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/mac/index.xml" rel="self" type="application/rss+xml"/><item><title>Mac 绘图工具推荐</title><link>https://liyan-ah.github.io/p/mac-%E7%BB%98%E5%9B%BE%E5%B7%A5%E5%85%B7%E6%8E%A8%E8%8D%90/</link><pubDate>Wed, 16 Feb 2022 10:51:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/mac-%E7%BB%98%E5%9B%BE%E5%B7%A5%E5%85%B7%E6%8E%A8%E8%8D%90/</guid><description>&lt;p>之前办公一直在&lt;code>Windows&lt;/code>系统中，诸如流程图、部署图等图表使用的是&lt;code>visio&lt;/code>。迁移到&lt;code>Mac&lt;/code>上后，&lt;code>visio&lt;/code>便不能使用了。转战到&lt;a class="link" href="https://www.sketch.com/" target="_blank" rel="noopener"
+>&lt;code>sketch&lt;/code>&lt;/a> 上，用着颇为顺手，无奈试用期到了之后，就无法使用了。评估了下使用需求及产品价格，只能启用。&lt;br>
+目前在使用&lt;a class="link" href="https://draw.io/" target="_blank" rel="noopener"
+>&lt;code>draw.io&lt;/code>&lt;/a> 进行日常绘图，开源、跨平台、免费、使用流畅，可以在线使用或者客户端使用。基本满足日常需求。用着还是比较好的。&lt;/p></description></item><item><title>Mac使用备注</title><link>https://liyan-ah.github.io/p/mac%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</link><pubDate>Thu, 10 Dec 2020 19:40:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/mac%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</guid><description>&lt;blockquote>
+&lt;p>最近开始使用Mac了。在使用过程中，发现了一些&lt;code>Mac OS&lt;/code>和&lt;code>Centos&lt;/code>体验上不同的地方。在这里做一下备注。&lt;/p>
+&lt;/blockquote>
+&lt;h3 id="部分linux指令缺失">
+&lt;a href="#%e9%83%a8%e5%88%86linux%e6%8c%87%e4%bb%a4%e7%bc%ba%e5%a4%b1">#&lt;/a>
+部分Linux指令缺失
+&lt;/h3>&lt;p>&lt;code>Mac OS&lt;/code>并没有实现所有的&lt;code>Linux&lt;/code>下的指令，如&lt;code>realpath&lt;/code>这里就需要单独安装一些扩展包了：&lt;/p>
+&lt;blockquote>
+&lt;p>brew install coreutils&lt;/p>
+&lt;/blockquote>
+&lt;h3 id="终端basic颜色不友好">
+&lt;a href="#%e7%bb%88%e7%ab%afbasic%e9%a2%9c%e8%89%b2%e4%b8%8d%e5%8f%8b%e5%a5%bd">#&lt;/a>
+终端Basic颜色不友好
+&lt;/h3>&lt;p>可以单独下载一些配色方案。从尽量使用原生配色的角度来说，只需要在&lt;code>.bashrc&lt;/code>下面作如下配置即可：&lt;/p>
+&lt;blockquote>
+&lt;p># for color&lt;br>
+export CLICOLOR=1&lt;br>
+# grep&lt;br>
+alias grep=&amp;lsquo;grep &amp;ndash;color=always&amp;rsquo;&lt;/p>
+&lt;/blockquote>
+&lt;p>此外，配合&lt;code>.vimrc&lt;/code>中配色变更食用更佳：&lt;/p>
+&lt;blockquote>
+&lt;p>&amp;quot; 设置搜索高亮&lt;br>
+set hlsearch&lt;br>
+&amp;quot; 设置语法高亮&lt;br>
+syntax on&lt;/p>
+&lt;/blockquote>
+&lt;h3 id="启动shell配置不同">
+&lt;a href="#%e5%90%af%e5%8a%a8shell%e9%85%8d%e7%bd%ae%e4%b8%8d%e5%90%8c">#&lt;/a>
+启动shell配置不同
+&lt;/h3>&lt;p>&lt;code>Mac OS&lt;/code>默认使用&lt;code>zsh&lt;/code>作为登陆&lt;code>shell&lt;/code>。所以设置&lt;code>.bashrc&lt;/code>作为启动配置时，需要在&lt;code>~/.zshrc&lt;/code>中进行配置：&lt;/p>
+&lt;blockquote>
+&lt;p>[ -f ~/.bashrc ] &amp;amp;&amp;amp; source ~/.bashrc&lt;/p>
+&lt;/blockquote>
+&lt;p>后面碰到再补充吧。&lt;/p></description></item></channel></rss>

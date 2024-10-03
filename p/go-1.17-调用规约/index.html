@@ -1,0 +1,332 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" go-1.17是一个很不友好的版本，这里我指的是函数调用规约的变更。在此之前，虽然栈传参比较奇怪，但是在掌握了规律后，参数信息很好获取。升级到go-1.17之后，笔者发现变更后的寄存器传值方式并不是系统的调用规约，至少和C/C++的是完全不一致的。这个问题使得笔者在处理ebpf方案时，始终无法覆盖go-1.17+的版本。虽然短期不会造成影响，线上服务使用的大多还在go-1.16以下，但是这始终是一个绕不过去的问题。近期通过查阅资料和参考其他开源项目里对这部分内容的处理，整理了一下go-1.17+的调用规约。\ngo在1.17之前使用的是内存栈来传递参数，这种传参的方式使得golang的语言设计很灵活：golang函数的多返回值能够很容易的实现。同样的，由于golang需要这样灵活的能力，是的系统默认的调用规约方式并不适用。在Proposal: Register-based Go calling convention文章里对这个问题进行了详细的讨论，总结起来是golang的特性使得使用系统默认规约并不能带来多语言交互上的收益，且golang希望保持独特。\n本文下面会给出总结的调用规约，并且给出验证程序。本文档的整理所基于的平台是x86_64的centos8系统。其他架构下，寄存器名称可能不同。\n"><title>go-1.17+ 调用规约</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="go-1.17+ 调用规约"><meta property='og:description' content=" go-1.17是一个很不友好的版本，这里我指的是函数调用规约的变更。在此之前，虽然栈传参比较奇怪，但是在掌握了规律后，参数信息很好获取。升级到go-1.17之后，笔者发现变更后的寄存器传值方式并不是系统的调用规约，至少和C/C++的是完全不一致的。这个问题使得笔者在处理ebpf方案时，始终无法覆盖go-1.17+的版本。虽然短期不会造成影响，线上服务使用的大多还在go-1.16以下，但是这始终是一个绕不过去的问题。近期通过查阅资料和参考其他开源项目里对这部分内容的处理，整理了一下go-1.17+的调用规约。\ngo在1.17之前使用的是内存栈来传递参数，这种传参的方式使得golang的语言设计很灵活：golang函数的多返回值能够很容易的实现。同样的，由于golang需要这样灵活的能力，是的系统默认的调用规约方式并不适用。在Proposal: Register-based Go calling convention文章里对这个问题进行了详细的讨论，总结起来是golang的特性使得使用系统默认规约并不能带来多语言交互上的收益，且golang希望保持独特。\n本文下面会给出总结的调用规约，并且给出验证程序。本文档的整理所基于的平台是x86_64的centos8系统。其他架构下，寄存器名称可能不同。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='golang'><meta property='article:tag' content='go-1.17'><meta property='article:published_time' content='2023-03-03T20:59:00+00:00'><meta property='article:modified_time' content='2023-03-03T20:59:00+00:00'><meta name=twitter:title content="go-1.17+ 调用规约"><meta name=twitter:description content=" go-1.17是一个很不友好的版本，这里我指的是函数调用规约的变更。在此之前，虽然栈传参比较奇怪，但是在掌握了规律后，参数信息很好获取。升级到go-1.17之后，笔者发现变更后的寄存器传值方式并不是系统的调用规约，至少和C/C++的是完全不一致的。这个问题使得笔者在处理ebpf方案时，始终无法覆盖go-1.17+的版本。虽然短期不会造成影响，线上服务使用的大多还在go-1.16以下，但是这始终是一个绕不过去的问题。近期通过查阅资料和参考其他开源项目里对这部分内容的处理，整理了一下go-1.17+的调用规约。\ngo在1.17之前使用的是内存栈来传递参数，这种传参的方式使得golang的语言设计很灵活：golang函数的多返回值能够很容易的实现。同样的，由于golang需要这样灵活的能力，是的系统默认的调用规约方式并不适用。在Proposal: Register-based Go calling convention文章里对这个问题进行了详细的讨论，总结起来是golang的特性使得使用系统默认规约并不能带来多语言交互上的收益，且golang希望保持独特。\n本文下面会给出总结的调用规约，并且给出验证程序。本文档的整理所基于的平台是x86_64的centos8系统。其他架构下，寄存器名称可能不同。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/>go-1.17+ 调用规约</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Mar 03, 2023</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 5 分钟</time></div></footer></div></header><section class=article-content><blockquote><p><code>go-1.17</code>是一个很不友好的版本，这里我指的是函数调用规约的变更。在此之前，虽然栈传参比较奇怪，但是在掌握了规律后，参数信息很好获取。升级到<code>go-1.17</code>之后，笔者发现变更后的寄存器传值方式并不是系统的调用规约，至少和<code>C/C++</code>的是完全不一致的。这个问题使得笔者在处理<code>ebpf</code>方案时，始终无法覆盖<code>go-1.17+</code>的版本。虽然短期不会造成影响，线上服务使用的大多还在<code>go-1.16</code>以下，但是这始终是一个绕不过去的问题。近期通过查阅资料和参考其他开源项目里对这部分内容的处理，整理了一下<code>go-1.17+</code>的调用规约。</p></blockquote><p><code>go</code>在<code>1.17</code>之前使用的是内存栈来传递参数，这种传参的方式使得<code>golang</code>的语言设计很灵活：<code>golang</code>函数的多返回值能够很容易的实现。同样的，由于<code>golang</code>需要这样灵活的能力，是的系统默认的调用规约方式并不适用。在<a class=link href=https://go.googlesource.com/proposal/+/refs/changes/78/248178/1/design/40724-register-calling.md target=_blank rel=noopener>Proposal: Register-based Go calling convention</a>文章里对这个问题进行了详细的讨论，总结起来是<code>golang</code>的特性使得使用系统默认规约并不能带来多语言交互上的收益，且<code>golang</code>希望保持独特。<br>本文下面会给出总结的调用规约，并且给出验证程序。本文档的整理所基于的平台是<code>x86_64</code>的<code>centos8</code>系统。其他架构下，寄存器名称可能不同。</p><h1 id=调用规约><a href=#%e8%b0%83%e7%94%a8%e8%a7%84%e7%ba%a6>#</a>
+调用规约</h1><p>入参：</p><div class=table-wrapper><table><thead><tr><th style=text-align:left>参数序号</th><th style=text-align:left>标准规约</th><th style=text-align:left>golang规约</th></tr></thead><tbody><tr><td style=text-align:left>1</td><td style=text-align:left>rdi</td><td style=text-align:left>rax</td></tr><tr><td style=text-align:left>2</td><td style=text-align:left>rsi</td><td style=text-align:left>rbx</td></tr><tr><td style=text-align:left>3</td><td style=text-align:left>rdx</td><td style=text-align:left>rcx</td></tr><tr><td style=text-align:left>4</td><td style=text-align:left>rcx</td><td style=text-align:left>rdi</td></tr><tr><td style=text-align:left>5</td><td style=text-align:left>r8</td><td style=text-align:left>rsi</td></tr><tr><td style=text-align:left>6</td><td style=text-align:left>r9</td><td style=text-align:left>r8</td></tr><tr><td style=text-align:left>7</td><td style=text-align:left>栈传值</td><td style=text-align:left>r9</td></tr><tr><td style=text-align:left>8</td><td style=text-align:left>栈传值</td><td style=text-align:left>r10</td></tr><tr><td style=text-align:left>9</td><td style=text-align:left>栈传值</td><td style=text-align:left>r11</td></tr><tr><td style=text-align:left>10</td><td style=text-align:left>栈传值</td><td style=text-align:left>栈传值</td></tr></tbody></table></div><p>返回值：</p><div class=table-wrapper><table><thead><tr><th style=text-align:left>参数序号</th><th style=text-align:left>标准规约</th><th style=text-align:left>golang规约</th></tr></thead><tbody><tr><td style=text-align:left>1</td><td style=text-align:left>rax</td><td style=text-align:left>rax</td></tr><tr><td style=text-align:left>2</td><td style=text-align:left>-</td><td style=text-align:left>rbx</td></tr><tr><td style=text-align:left>3</td><td style=text-align:left>-</td><td style=text-align:left>rcx</td></tr><tr><td style=text-align:left>4</td><td style=text-align:left>-</td><td style=text-align:left>rdi</td></tr><tr><td style=text-align:left>5</td><td style=text-align:left>-</td><td style=text-align:left>rsi</td></tr><tr><td style=text-align:left>6</td><td style=text-align:left>-</td><td style=text-align:left>r8</td></tr><tr><td style=text-align:left>7</td><td style=text-align:left>-</td><td style=text-align:left>r9</td></tr><tr><td style=text-align:left>8</td><td style=text-align:left>-</td><td style=text-align:left>r10</td></tr><tr><td style=text-align:left>9</td><td style=text-align:left>-</td><td style=text-align:left>r11</td></tr><tr><td style=text-align:left>10</td><td style=text-align:left>-</td><td style=text-align:left>栈传值</td></tr></tbody></table></div><h1 id=验证规约><a href=#%e9%aa%8c%e8%af%81%e8%a7%84%e7%ba%a6>#</a>
+验证规约</h1><p>这个条件是比较好验证的，看下验证代码:</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-golang data-lang=golang><span class=line><span class=cl><span class=c1>// go version 1.18
+</span></span></span><span class=line><span class=cl><span class=c1>// ./go_18/arg/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>longArgs</span><span class=p>(</span><span class=nx>a1</span><span class=p>,</span> <span class=nx>a2</span><span class=p>,</span> <span class=nx>a3</span><span class=p>,</span> <span class=nx>a4</span><span class=p>,</span> <span class=nx>a5</span><span class=p>,</span> <span class=nx>a6</span><span class=p>,</span> <span class=nx>a7</span><span class=p>,</span> <span class=nx>a8</span><span class=p>,</span> <span class=nx>a9</span><span class=p>,</span> <span class=nx>a10</span><span class=p>,</span> <span class=nx>a11</span> <span class=kt>uint64</span><span class=p>)</span> <span class=p>(</span><span class=nx>r1</span><span class=p>,</span> <span class=nx>r2</span><span class=p>,</span> <span class=nx>r3</span><span class=p>,</span> <span class=nx>r4</span><span class=p>,</span> <span class=nx>r5</span><span class=p>,</span> <span class=nx>r6</span><span class=p>,</span> <span class=nx>r7</span><span class=p>,</span> <span class=nx>r8</span><span class=p>,</span> <span class=nx>r9</span><span class=p>,</span> <span class=nx>r10</span><span class=p>,</span> <span class=nx>r11</span> <span class=kt>uint64</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=k>return</span> <span class=nx>a1</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=nx>a2</span> <span class=o>+</span> <span class=mi>2</span><span class=p>,</span> <span class=nx>a3</span> <span class=o>+</span> <span class=mi>3</span><span class=p>,</span> <span class=nx>a4</span> <span class=o>+</span> <span class=mi>4</span><span class=p>,</span> <span class=nx>a5</span> <span class=o>+</span> <span class=mi>5</span><span class=p>,</span> <span class=nx>a6</span> <span class=o>+</span> <span class=mi>6</span><span class=p>,</span> <span class=nx>a7</span> <span class=o>+</span> <span class=mi>7</span><span class=p>,</span> <span class=nx>a8</span> <span class=o>+</span> <span class=mi>8</span><span class=p>,</span> <span class=nx>a9</span> <span class=o>+</span> <span class=mi>9</span><span class=p>,</span> <span class=nx>a10</span> <span class=o>+</span> <span class=mi>10</span><span class=p>,</span> <span class=nx>a11</span> <span class=o>+</span> <span class=mi>11</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>a1</span><span class=p>,</span> <span class=nx>a2</span><span class=p>,</span> <span class=nx>a3</span><span class=p>,</span> <span class=nx>a4</span><span class=p>,</span> <span class=nx>a5</span><span class=p>,</span> <span class=nx>a6</span><span class=p>,</span> <span class=nx>a7</span><span class=p>,</span> <span class=nx>a8</span><span class=p>,</span> <span class=nx>a9</span><span class=p>,</span> <span class=nx>a10</span><span class=p>,</span> <span class=nx>a11</span> <span class=o>:=</span> <span class=nf>longArgs</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>8</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>11</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>a1</span><span class=p>,</span> <span class=nx>a2</span><span class=p>,</span> <span class=nx>a3</span><span class=p>,</span> <span class=nx>a4</span><span class=p>,</span> <span class=nx>a5</span><span class=p>,</span> <span class=nx>a6</span><span class=p>,</span> <span class=nx>a7</span><span class=p>,</span> <span class=nx>a8</span><span class=p>,</span> <span class=nx>a9</span><span class=p>,</span> <span class=nx>a10</span><span class=p>,</span> <span class=nx>a11</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>先生成<code>plan9</code>代码以说明参数传入和参数返回均是使用的寄存器，并且寄存器顺序是一致的（内存传参时也是）。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span><span class=lnt>68
+</span><span class=lnt>69
+</span><span class=lnt>70
+</span><span class=lnt>71
+</span><span class=lnt>72
+</span><span class=lnt>73
+</span><span class=lnt>74
+</span><span class=lnt>75
+</span><span class=lnt>76
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-golang data-lang=golang><span class=line><span class=cl><span class=k>go</span> <span class=nx>build</span> <span class=o>-</span><span class=nx>gcflags</span> <span class=s>&#34;-N -S -l&#34;</span> <span class=o>&gt;&gt;</span> <span class=nx>arg</span><span class=p>.</span><span class=nx>info</span>
+</span></span><span class=line><span class=cl><span class=err>#</span> <span class=nx>然后截取部分生成</span> <span class=nx>plan9</span> <span class=nx>汇编</span>
+</span></span><span class=line><span class=cl><span class=err>#</span> <span class=nx>go_18</span><span class=o>/</span><span class=nx>arg</span>
+</span></span><span class=line><span class=cl><span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>longArgs</span> <span class=nx>STEXT</span> <span class=nx>nosplit</span> <span class=nx>size</span><span class=p>=</span><span class=mi>411</span> <span class=nx>args</span><span class=p>=</span><span class=mh>0x68</span> <span class=nx>locals</span><span class=p>=</span><span class=mh>0x50</span> <span class=nx>funcid</span><span class=p>=</span><span class=mh>0x0</span> <span class=nx>align</span><span class=p>=</span><span class=mh>0x0</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0000</span> <span class=mo>00000</span> 	<span class=nx>TEXT</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nf>longArgs</span><span class=p>(</span><span class=nx>SB</span><span class=p>),</span> <span class=nx>NOSPLIT</span><span class=p>|</span><span class=nx>ABIInternal</span><span class=p>,</span> <span class=err>$</span><span class=mi>80</span><span class=o>-</span><span class=mi>104</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0000</span> <span class=mo>00000</span> 	<span class=nx>SUBQ</span>	<span class=err>$</span><span class=mi>80</span><span class=p>,</span> <span class=nx>SP</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0004</span> <span class=mo>00004</span> 	<span class=nx>MOVQ</span>	<span class=nx>BP</span><span class=p>,</span> <span class=mi>72</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0009</span> <span class=mo>0000</span><span class=mi>9</span> 	<span class=nx>LEAQ</span>	<span class=mi>72</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>BP</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x000e</span> <span class=mo>00014</span> 	<span class=nx>FUNCDATA</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=nx>gclocals</span><span class=err>·</span><span class=mi>33</span><span class=nf>cdeccccebe80329f1fdbee7f5874cb</span><span class=p>(</span><span class=nx>SB</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x000e</span> <span class=mo>00014</span> 	<span class=nx>FUNCDATA</span>	<span class=err>$</span><span class=mi>1</span><span class=p>,</span> <span class=nx>gclocals</span><span class=err>·</span><span class=mi>33</span><span class=nf>cdeccccebe80329f1fdbee7f5874cb</span><span class=p>(</span><span class=nx>SB</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x000e</span> <span class=mo>00014</span> 	<span class=nx>FUNCDATA</span>	<span class=err>$</span><span class=mi>5</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>longArgs</span><span class=p>.</span><span class=nf>arginfo1</span><span class=p>(</span><span class=nx>SB</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x000e</span> <span class=mo>00014</span> 	<span class=nx>MOVQ</span>	<span class=nx>AX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a1</span><span class=o>+</span><span class=mi>120</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>  <span class=err>#</span> <span class=nx>注意这里的读取参数寄存器</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0013</span> <span class=mo>0001</span><span class=mi>9</span> 	<span class=nx>MOVQ</span>	<span class=nx>BX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a2</span><span class=o>+</span><span class=mi>128</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x001b</span> <span class=mo>00027</span> 	<span class=nx>MOVQ</span>	<span class=nx>CX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a3</span><span class=o>+</span><span class=mi>136</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0023</span> <span class=mo>00035</span> 	<span class=nx>MOVQ</span>	<span class=nx>DI</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a4</span><span class=o>+</span><span class=mi>144</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x002b</span> <span class=mo>00043</span> 	<span class=nx>MOVQ</span>	<span class=nx>SI</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a5</span><span class=o>+</span><span class=mi>152</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0033</span> <span class=mo>00051</span> 	<span class=nx>MOVQ</span>	<span class=nx>R8</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a6</span><span class=o>+</span><span class=mi>160</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x003b</span> <span class=mo>0005</span><span class=mi>9</span> 	<span class=nx>MOVQ</span>	<span class=nx>R9</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a7</span><span class=o>+</span><span class=mi>168</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0043</span> <span class=mo>00067</span> 	<span class=nx>MOVQ</span>	<span class=nx>R10</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a8</span><span class=o>+</span><span class=mi>176</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x004b</span> <span class=mo>00075</span> 	<span class=nx>MOVQ</span>	<span class=nx>R11</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a9</span><span class=o>+</span><span class=mi>184</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0053</span> <span class=mo>000</span><span class=mi>83</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r1</span><span class=o>+</span><span class=mi>64</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x005c</span> <span class=mo>000</span><span class=mi>92</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r2</span><span class=o>+</span><span class=mi>56</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0065</span> <span class=mo>00101</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r3</span><span class=o>+</span><span class=mi>48</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x006e</span> <span class=mo>00110</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r4</span><span class=o>+</span><span class=mi>40</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0077</span> <span class=mo>0011</span><span class=mi>9</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r5</span><span class=o>+</span><span class=mi>32</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0080</span> <span class=mo>0012</span><span class=mi>8</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r6</span><span class=o>+</span><span class=mi>24</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0089</span> <span class=mo>00137</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r7</span><span class=o>+</span><span class=mi>16</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0092</span> <span class=mo>00146</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r8</span><span class=o>+</span><span class=mi>8</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x009b</span> <span class=mo>00155</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nf>r9</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00a3</span> <span class=mo>00163</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r10</span><span class=o>+</span><span class=mi>104</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00ac</span> <span class=mo>00172</span> 	<span class=nx>MOVQ</span>	<span class=err>$</span><span class=mi>0</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r11</span><span class=o>+</span><span class=mi>112</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00b5</span> <span class=mo>001</span><span class=mi>81</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a1</span><span class=o>+</span><span class=mi>120</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00ba</span> <span class=mo>001</span><span class=mi>86</span> 	<span class=nx>INCQ</span>	<span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00bd</span> <span class=mo>001</span><span class=mi>89</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r1</span><span class=o>+</span><span class=mi>64</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00c2</span> <span class=mo>001</span><span class=mi>94</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a2</span><span class=o>+</span><span class=mi>128</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00ca</span> <span class=mo>00202</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>2</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00ce</span> <span class=mo>00206</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r2</span><span class=o>+</span><span class=mi>56</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00d3</span> <span class=mo>00211</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a3</span><span class=o>+</span><span class=mi>136</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00db</span> <span class=mo>0021</span><span class=mi>9</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>3</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00df</span> <span class=mo>00223</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r3</span><span class=o>+</span><span class=mi>48</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00e4</span> <span class=mo>0022</span><span class=mi>8</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a4</span><span class=o>+</span><span class=mi>144</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00ec</span> <span class=mo>00236</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>4</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00f0</span> <span class=mo>00240</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r4</span><span class=o>+</span><span class=mi>40</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00f5</span> <span class=mo>00245</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a5</span><span class=o>+</span><span class=mi>152</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x00fd</span> <span class=mo>00253</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>5</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0101</span> <span class=mo>00257</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r5</span><span class=o>+</span><span class=mi>32</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0106</span> <span class=mo>00262</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a6</span><span class=o>+</span><span class=mi>160</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x010e</span> <span class=mo>00270</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>6</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0112</span> <span class=mo>00274</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r6</span><span class=o>+</span><span class=mi>24</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0117</span> <span class=mo>0027</span><span class=mi>9</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a7</span><span class=o>+</span><span class=mi>168</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x011f</span> <span class=mo>002</span><span class=mi>87</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>7</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0123</span> <span class=mo>002</span><span class=mi>91</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r7</span><span class=o>+</span><span class=mi>16</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0128</span> <span class=mo>002</span><span class=mi>96</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a8</span><span class=o>+</span><span class=mi>176</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0130</span> <span class=mo>00304</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>8</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0134</span> <span class=mo>0030</span><span class=mi>8</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r8</span><span class=o>+</span><span class=mi>8</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0139</span> <span class=mo>00313</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a9</span><span class=o>+</span><span class=mi>184</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0141</span> <span class=mo>00321</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>9</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0145</span> <span class=mo>00325</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nf>r9</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0149</span> <span class=mo>0032</span><span class=mi>9</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a10</span><span class=o>+</span><span class=mi>88</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>   <span class=err>#</span> <span class=nx>这里使用栈传递a10</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x014e</span> <span class=mo>00334</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>10</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0152</span> <span class=mo>0033</span><span class=mi>8</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r10</span><span class=o>+</span><span class=mi>104</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0157</span> <span class=mo>00343</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>a11</span><span class=o>+</span><span class=mi>96</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x015c</span> <span class=mo>0034</span><span class=mi>8</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>11</span><span class=p>,</span> <span class=nx>DX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0160</span> <span class=mo>00352</span> 	<span class=nx>MOVQ</span>	<span class=nx>DX</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r11</span><span class=o>+</span><span class=mi>112</span><span class=p>(</span><span class=nx>SP</span><span class=p>)</span>  <span class=err>#</span> <span class=nx>这里使用栈传递</span> <span class=nx>a11</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0165</span> <span class=mo>00357</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r1</span><span class=o>+</span><span class=mi>64</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>AX</span>    <span class=err>#</span> <span class=nx>注意这里返回参数的寄存器</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x016a</span> <span class=mo>00362</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r2</span><span class=o>+</span><span class=mi>56</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>BX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x016f</span> <span class=mo>00367</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r3</span><span class=o>+</span><span class=mi>48</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>CX</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0174</span> <span class=mo>00372</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r4</span><span class=o>+</span><span class=mi>40</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>DI</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0179</span> <span class=mo>00377</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r5</span><span class=o>+</span><span class=mi>32</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>SI</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x017e</span> <span class=mo>003</span><span class=mi>82</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r6</span><span class=o>+</span><span class=mi>24</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>R8</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0183</span> <span class=mo>003</span><span class=mi>87</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r7</span><span class=o>+</span><span class=mi>16</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>R9</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0188</span> <span class=mo>003</span><span class=mi>92</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nx>r8</span><span class=o>+</span><span class=mi>8</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>R10</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x018d</span> <span class=mo>003</span><span class=mi>97</span> 	<span class=nx>MOVQ</span>	<span class=s>&#34;&#34;</span><span class=p>.</span><span class=nf>r9</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>R11</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0191</span> <span class=mo>00401</span> 	<span class=nx>MOVQ</span>	<span class=mi>72</span><span class=p>(</span><span class=nx>SP</span><span class=p>),</span> <span class=nx>BP</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x0196</span> <span class=mo>00406</span> 	<span class=nx>ADDQ</span>	<span class=err>$</span><span class=mi>80</span><span class=p>,</span> <span class=nx>SP</span>
+</span></span><span class=line><span class=cl>	<span class=mh>0x019a</span> <span class=mo>00410</span> 	<span class=nx>RET</span>
+</span></span></code></pre></td></tr></table></div></div><p>从上面的<code>plan9</code>可以看出来，函数入参和返回值确实是使用寄存器传递的，且寄存器信息是一致的。实际上到这里就足够了。但是笔者还需要确定下使用的寄存器名称并进行验证，因为这些参数是在做<code>ebpf</code>逻辑处理的时候使用的。</p><h1 id=使用ebpf获取入参并输出><a href=#%e4%bd%bf%e7%94%a8ebpf%e8%8e%b7%e5%8f%96%e5%85%a5%e5%8f%82%e5%b9%b6%e8%be%93%e5%87%ba>#</a>
+使用ebpf获取入参并输出</h1><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// 这里表述下依据plan9寄存器符号推测的实际寄存器名称：
+</span></span><span class=line><span class=cl>#define GO_PARAM1(x) ((x)-&gt;rax)
+</span></span><span class=line><span class=cl>#define GO_PARAM2(x) ((x)-&gt;rbx)
+</span></span><span class=line><span class=cl>#define GO_PARAM3(x) ((x)-&gt;rcx)
+</span></span><span class=line><span class=cl>#define GO_PARAM4(x) ((x)-&gt;rdi)
+</span></span><span class=line><span class=cl>#define GO_PARAM5(x) ((x)-&gt;rsi)
+</span></span><span class=line><span class=cl>#define GO_PARAM6(x) ((x)-&gt;r8)
+</span></span><span class=line><span class=cl>#define GO_PARAM7(x) ((x)-&gt;r9)
+</span></span><span class=line><span class=cl>#define GO_PARAM8(x) ((x)-&gt;r10)
+</span></span><span class=line><span class=cl>#define GO_PARAM9(x) ((x)-&gt;r11)
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>struct event {
+</span></span><span class=line><span class=cl>    u32 pid;
+</span></span><span class=line><span class=cl>    u8 comm[64];
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // args
+</span></span><span class=line><span class=cl>    u64 arg0;
+</span></span><span class=line><span class=cl>    u64 arg1;
+</span></span><span class=line><span class=cl>    u64 arg2;
+</span></span><span class=line><span class=cl>    u64 arg3;
+</span></span><span class=line><span class=cl>    u64 arg4;
+</span></span><span class=line><span class=cl>    u64 arg5;
+</span></span><span class=line><span class=cl>    u64 arg6;
+</span></span><span class=line><span class=cl>    u64 arg7;
+</span></span><span class=line><span class=cl>    u64 arg8;
+</span></span><span class=line><span class=cl>    u64 arg9;
+</span></span><span class=line><span class=cl>    u64 arg10;
+</span></span><span class=line><span class=cl>};
+</span></span><span class=line><span class=cl>SEC(&#34;uprobe/main.longArgs&#34;)
+</span></span><span class=line><span class=cl>int uprobe__main_long_args(struct pt_regs *ctx) {
+</span></span><span class=line><span class=cl>    struct event args={};
+</span></span><span class=line><span class=cl>    args.pid = bpf_get_current_pid_tgid();
+</span></span><span class=line><span class=cl>    bpf_get_current_comm(&amp;args.comm, sizeof(args.comm));
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // read args 0-8，从寄存器中获取
+</span></span><span class=line><span class=cl>    args.arg0 = GO_PARAM1(ctx);
+</span></span><span class=line><span class=cl>    args.arg1 = GO_PARAM2(ctx);
+</span></span><span class=line><span class=cl>    args.arg2 = GO_PARAM3(ctx);
+</span></span><span class=line><span class=cl>    args.arg3 = GO_PARAM4(ctx);
+</span></span><span class=line><span class=cl>    args.arg4 = GO_PARAM5(ctx);
+</span></span><span class=line><span class=cl>    args.arg5 = GO_PARAM6(ctx);
+</span></span><span class=line><span class=cl>    args.arg6 = GO_PARAM7(ctx);
+</span></span><span class=line><span class=cl>    args.arg7 = GO_PARAM8(ctx);
+</span></span><span class=line><span class=cl>    args.arg8 = GO_PARAM9(ctx);
+</span></span><span class=line><span class=cl>    
+</span></span><span class=line><span class=cl>    // read args 9-10，从栈上获取
+</span></span><span class=line><span class=cl>    bpf_probe_read(&amp;args.arg9, sizeof(args.arg9), (void*)(PT_REGS_SP(ctx))+8);
+</span></span><span class=line><span class=cl>    bpf_probe_read(&amp;args.arg10, sizeof(args.arg10), (void*)(PT_REGS_SP(ctx))+16);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;args, sizeof(args));
+</span></span><span class=line><span class=cl>    return 0;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>编译完成后，启动这部分<code>ebpf</code>监听任务：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=c1># 启动监听</span>
+</span></span><span class=line><span class=cl><span class=o>./</span><span class=n>go_18</span> <span class=o>-</span><span class=n>bin_path</span> <span class=o>./</span><span class=n>arg</span><span class=o>/</span><span class=n>arg</span> <span class=o>-</span><span class=n>uprobe</span> <span class=n>main</span><span class=o>.</span><span class=n>longArgs</span>
+</span></span><span class=line><span class=cl><span class=mi>2023</span><span class=o>/</span><span class=mi>03</span><span class=o>/</span><span class=mi>03</span> <span class=mi>22</span><span class=p>:</span><span class=mi>07</span><span class=p>:</span><span class=mi>32</span> <span class=n>Listening</span> <span class=k>for</span> <span class=n>events</span><span class=o>..</span>
+</span></span><span class=line><span class=cl><span class=c1># 触发 ./arg/arg 执行</span>
+</span></span><span class=line><span class=cl><span class=mi>2023</span><span class=o>/</span><span class=mi>03</span><span class=o>/</span><span class=mi>03</span> <span class=mi>22</span><span class=p>:</span><span class=mi>07</span><span class=p>:</span><span class=mi>46</span> <span class=n>pid</span><span class=p>:</span> <span class=mi>756309</span><span class=p>,</span> <span class=n>comm</span><span class=p>:</span> <span class=n>arg</span>
+</span></span><span class=line><span class=cl><span class=mi>2023</span><span class=o>/</span><span class=mi>03</span><span class=o>/</span><span class=mi>03</span> <span class=mi>22</span><span class=p>:</span><span class=mi>07</span><span class=p>:</span><span class=mi>46</span> <span class=o>/</span><span class=n>home</span><span class=o>/</span><span class=n>odin</span><span class=o>/</span><span class=n>pdliyan</span><span class=o>/</span><span class=n>blog</span><span class=o>/</span><span class=n>go_18</span><span class=o>/</span><span class=n>arg</span><span class=o>/</span><span class=n>arg</span><span class=p>:</span> <span class=n>main</span><span class=o>.</span><span class=n>longArgs</span>  <span class=n>value</span><span class=p>:</span> <span class=p>{</span><span class=n>Pid</span><span class=p>:</span><span class=mi>756309</span> <span class=n>Comm</span><span class=p>:[</span><span class=mi>97</span> <span class=mi>114</span> <span class=mi>103</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span><span class=p>]</span> <span class=n>_</span><span class=p>:[</span><span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span><span class=p>]</span> <span class=n>Arg0</span><span class=p>:</span><span class=mi>1</span> <span class=n>Arg1</span><span class=p>:</span><span class=mi>2</span> <span class=n>Arg2</span><span class=p>:</span><span class=mi>3</span> <span class=n>Arg3</span><span class=p>:</span><span class=mi>4</span> <span class=n>Arg4</span><span class=p>:</span><span class=mi>5</span> <span class=n>Arg5</span><span class=p>:</span><span class=mi>6</span> <span class=n>Arg6</span><span class=p>:</span><span class=mi>7</span> <span class=n>Arg7</span><span class=p>:</span><span class=mi>8</span> <span class=n>Arg8</span><span class=p>:</span><span class=mi>9</span> <span class=n>Arg9</span><span class=p>:</span><span class=mi>10</span> <span class=n>Arg10</span><span class=p>:</span><span class=mi>11</span><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=c1># 请注意这里的参数是和我们的代码一致的。</span>
+</span></span><span class=line><span class=cl><span class=mi>2023</span><span class=o>/</span><span class=mi>03</span><span class=o>/</span><span class=mi>03</span> <span class=mi>22</span><span class=p>:</span><span class=mi>07</span><span class=p>:</span><span class=mi>46</span> <span class=n>event</span> <span class=n>info</span><span class=p>:</span> <span class=p>{</span><span class=n>Pid</span><span class=p>:</span><span class=mi>756309</span> <span class=n>Comm</span><span class=p>:[</span><span class=mi>97</span> <span class=mi>114</span> <span class=mi>103</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span><span class=p>]</span> <span class=n>_</span><span class=p>:[</span><span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span> <span class=mi>0</span><span class=p>]</span> <span class=n>Arg0</span><span class=p>:</span><span class=mi>1</span> <span class=n>Arg1</span><span class=p>:</span><span class=mi>2</span> <span class=n>Arg2</span><span class=p>:</span><span class=mi>3</span> <span class=n>Arg3</span><span class=p>:</span><span class=mi>4</span> <span class=n>Arg4</span><span class=p>:</span><span class=mi>5</span> <span class=n>Arg5</span><span class=p>:</span><span class=mi>6</span> <span class=n>Arg6</span><span class=p>:</span><span class=mi>7</span> <span class=n>Arg7</span><span class=p>:</span><span class=mi>8</span> <span class=n>Arg8</span><span class=p>:</span><span class=mi>9</span> <span class=n>Arg9</span><span class=p>:</span><span class=mi>10</span> <span class=n>Arg10</span><span class=p>:</span><span class=mi>11</span><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=c1># 退出</span>
+</span></span><span class=line><span class=cl><span class=mi>2023</span><span class=o>/</span><span class=mi>03</span><span class=o>/</span><span class=mi>03</span> <span class=mi>22</span><span class=p>:</span><span class=mi>08</span><span class=p>:</span><span class=mi>38</span> <span class=n>Received</span> <span class=k>signal</span><span class=p>,</span> <span class=n>exiting</span> <span class=n>program</span><span class=o>...</span>
+</span></span></code></pre></td></tr></table></div></div><p>从上面的输出可以确定<code>plan9</code>的寄存器符号和实际寄存器的对应关系是正确的。</p><p>以上就验证了困扰笔者的<code>go-17+</code>参数调用规约的问题。可以看到，依旧十分的奇葩。<br>周末愉快。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/golang/>Golang</a>
+<a href=/tags/go-1.17/>Go-1.17</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/><div class=article-details><h2 class=article-title>如何追踪golang channel?</h2></div></a></article><article><a href=/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/><div class=article-details><h2 class=article-title>BPF追踪Go程序的挑战</h2></div></a></article><article><a href=/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/><div class=article-details><h2 class=article-title>golang常见类型作为参数的eBPF解析</h2></div></a></article><article><a href=/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/><div class=article-details><h2 class=article-title>基于ebpf实现的gls</h2></div></a></article><article><a href=/p/bpf-lru_hash_map-%E5%8F%8A-hash_map-%E7%9A%84%E4%BD%BF%E7%94%A8%E5%BC%82%E5%B8%B8/><div class=article-details><h2 class=article-title>BPF LRU_HASH_MAP 及 HASH_MAP 的使用异常</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

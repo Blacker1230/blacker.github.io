@@ -1,0 +1,228 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" bpftrace 基于 bcc 进行开发的工具，语法简洁、功能强大。用其分析Linux 环境下的程序会很方便。本文构造了一个入参为链表头节点的函数使用场景，通过使用bpftrace无侵入遍历链表成员的方式，介绍bpftrace attach uprobe 的使用。更多使用说明见:bpftrace官网使用文档\n"><title>bpftrace 无侵入遍历golang链表</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="bpftrace 无侵入遍历golang链表"><meta property='og:description' content=" bpftrace 基于 bcc 进行开发的工具，语法简洁、功能强大。用其分析Linux 环境下的程序会很方便。本文构造了一个入参为链表头节点的函数使用场景，通过使用bpftrace无侵入遍历链表成员的方式，介绍bpftrace attach uprobe 的使用。更多使用说明见:bpftrace官网使用文档\n"><meta property='og:url' content='https://liyan-ah.github.io/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='golang'><meta property='article:tag' content='uprobe'><meta property='article:tag' content='bpf'><meta property='article:published_time' content='2022-07-22T21:48:00+00:00'><meta property='article:modified_time' content='2022-07-22T21:48:00+00:00'><meta name=twitter:title content="bpftrace 无侵入遍历golang链表"><meta name=twitter:description content=" bpftrace 基于 bcc 进行开发的工具，语法简洁、功能强大。用其分析Linux 环境下的程序会很方便。本文构造了一个入参为链表头节点的函数使用场景，通过使用bpftrace无侵入遍历链表成员的方式，介绍bpftrace attach uprobe 的使用。更多使用说明见:bpftrace官网使用文档\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/>bpftrace 无侵入遍历golang链表</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jul 22, 2022</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 2 分钟</time></div></footer></div></header><section class=article-content><blockquote><p><code>bpftrace</code> 基于 <code>bcc</code> 进行开发的工具，语法简洁、功能强大。用其分析<code>Linux</code> 环境下的程序会很方便。本文构造了一个入参为链表头节点的函数使用场景，通过使用<code>bpftrace</code>无侵入遍历链表成员的方式，介绍<code>bpftrace</code> <code>attach uprobe</code> 的使用。更多使用说明见:<a class=link href=https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md target=_blank rel=noopener>bpftrace官网使用文档</a></p></blockquote><h1 id=执行结果><a href=#%e6%89%a7%e8%a1%8c%e7%bb%93%e6%9e%9c>#</a>
+执行结果</h1><p>下面直接给出执行结果。可以看到，通过<code>bpftrace</code>脚本输出的结果与代码中实际遍历的结果相同。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>sudo ./handle.bt  // 先启动监听
+</span></span><span class=line><span class=cl>Attaching 1 probe...  // 启动后停止在这里
+</span></span><span class=line><span class=cl>=== enter main.handle.  // 目标程序执行后输出
+</span></span><span class=line><span class=cl>name: Alice
+</span></span><span class=line><span class=cl>age : 10
+</span></span><span class=line><span class=cl>name: Bob
+</span></span><span class=line><span class=cl>age : 11
+</span></span><span class=line><span class=cl>name: Claire
+</span></span><span class=line><span class=cl>age : 12
+</span></span><span class=line><span class=cl>=== total node: 3
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>./demo  // 再执行目标程序
+</span></span><span class=line><span class=cl>cur name: Alice, cur aget: 10
+</span></span><span class=line><span class=cl>cur name: Bob, cur aget: 11
+</span></span><span class=line><span class=cl>cur name: Claire, cur aget: 12
+</span></span></code></pre></td></tr></table></div></div><h1 id=示例说明><a href=#%e7%a4%ba%e4%be%8b%e8%af%b4%e6%98%8e>#</a>
+示例说明</h1><p>系统环境如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>Linux 4.18.0-193.6.3.el8_2.v1.2.x86_64
+</span></span><span class=line><span class=cl>bpftrace v0.14.0-72-g6761-dirty
+</span></span><span class=line><span class=cl>go version go1.16.15 linux/amd64
+</span></span></code></pre></td></tr></table></div></div><p>示例环境目录：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>.
+</span></span><span class=line><span class=cl>├── demo
+</span></span><span class=line><span class=cl>├── go.mod
+</span></span><span class=line><span class=cl>├── handle.bt
+</span></span><span class=line><span class=cl>└── main.go
+</span></span></code></pre></td></tr></table></div></div><p>其中：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>    <span class=s>&#34;context&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>type</span> <span class=nx>Student</span> <span class=kd>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nx>Name</span> <span class=kt>string</span>
+</span></span><span class=line><span class=cl>    <span class=nx>Age</span>  <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>    <span class=c1>// Comment [600]Byte 这样会使得这个问题变得很麻烦，hhh
+</span></span></span><span class=line><span class=cl><span class=c1></span>    <span class=nx>Next</span> <span class=o>*</span><span class=nx>Student</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// 添加如下配置以防止函数被编译优化掉
+</span></span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>handle</span><span class=p>(</span><span class=nx>ctx</span> <span class=nx>context</span><span class=p>.</span><span class=nx>Context</span><span class=p>,</span> <span class=nx>student</span> <span class=o>*</span><span class=nx>Student</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>for</span> <span class=nx>cur</span> <span class=o>:=</span> <span class=nx>student</span><span class=p>;</span> <span class=nx>cur</span> <span class=o>!=</span> <span class=kc>nil</span><span class=p>;</span> <span class=nx>cur</span> <span class=p>=</span> <span class=nx>cur</span><span class=p>.</span><span class=nx>Next</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=nx>fmt</span><span class=p>.</span><span class=nf>Printf</span><span class=p>(</span><span class=s>&#34;cur name: %s, cur aget: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>cur</span><span class=p>.</span><span class=nx>Name</span><span class=p>,</span> <span class=nx>cur</span><span class=p>.</span><span class=nx>Age</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nx>first</span> <span class=o>:=</span> <span class=o>&amp;</span><span class=nx>Student</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=nx>Name</span><span class=p>:</span> <span class=s>&#34;Alice&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=nx>Age</span><span class=p>:</span>  <span class=mi>10</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=nx>Next</span><span class=p>:</span> <span class=o>&amp;</span><span class=nx>Student</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>            <span class=nx>Name</span><span class=p>:</span> <span class=s>&#34;Bob&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>            <span class=nx>Age</span><span class=p>:</span>  <span class=mi>11</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>            <span class=nx>Next</span><span class=p>:</span> <span class=o>&amp;</span><span class=nx>Student</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>                <span class=nx>Name</span><span class=p>:</span> <span class=s>&#34;Claire&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>                <span class=nx>Age</span><span class=p>:</span>  <span class=mi>13</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>                <span class=nx>Next</span><span class=p>:</span> <span class=kc>nil</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>            <span class=p>}}}</span>
+</span></span><span class=line><span class=cl>    <span class=nf>handle</span><span class=p>(</span><span class=nx>context</span><span class=p>.</span><span class=nf>Background</span><span class=p>(),</span> <span class=nx>first</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// handle.bt
+</span></span><span class=line><span class=cl>#!/bin/bpftrace
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>// 当目标结构体较小时(使得整体栈开销 &lt; 512Byte)，可以直接构造使用
+</span></span><span class=line><span class=cl>struct student{
+</span></span><span class=line><span class=cl>    u64 name_ptr;
+</span></span><span class=line><span class=cl>    u64 name_length;
+</span></span><span class=line><span class=cl>    long  age;
+</span></span><span class=line><span class=cl>    struct student *next;
+</span></span><span class=line><span class=cl>};
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./demo:&#34;main.handle&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;=== enter main.handle.
+</span></span><span class=line><span class=cl>&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    $cur = (struct student *)sarg2;
+</span></span><span class=line><span class=cl>    if ($cur == 0){
+</span></span><span class=line><span class=cl>        printf(&#34;input param is nil.
+</span></span><span class=line><span class=cl>&#34;);
+</span></span><span class=line><span class=cl>        return;
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>    $node_count = 1;
+</span></span><span class=line><span class=cl>    unroll(10){  // 这里定义的最大节点数量为10
+</span></span><span class=line><span class=cl>        printf(&#34;name: %s
+</span></span><span class=line><span class=cl>&#34;, str($cur-&gt;name_ptr, $cur-&gt;name_length));
+</span></span><span class=line><span class=cl>        printf(&#34;age : %d
+</span></span><span class=line><span class=cl>&#34;, $cur-&gt;age);
+</span></span><span class=line><span class=cl>        $cur = $cur-&gt;next;
+</span></span><span class=line><span class=cl>        if ($cur == 0){
+</span></span><span class=line><span class=cl>            printf(&#34;=== total node: %d
+</span></span><span class=line><span class=cl>&#34;, $node_count);
+</span></span><span class=line><span class=cl>            return;
+</span></span><span class=line><span class=cl>        }
+</span></span><span class=line><span class=cl>        $node_count += 1;
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    printf(&#34;==== meet max
+</span></span><span class=line><span class=cl>&#34;);
+</span></span><span class=line><span class=cl>    return;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>在编译完成<code>main.go</code>后，通过<code>sudo bpftrace -l "uprobe:./demo:*" > uprobe.info</code>的方式，可以获取<code>demo</code>中所有可以<code>attach</code>的<code>uprobe</code>信息。这里说明下取<code>student*</code>指针值时，为什么取<code>sarg3</code>。<code>bpftrace</code>中对内存传参的参数支持是<code>sarg0, sarg1, sarg2...</code>，且每个参数实际只对应<code>8Byte</code>大小的空间。对于<code>func handle(ctx context.Context, student *Student)</code>函数来说，由于<code>context.Context</code>实际占用<code>2*8Byte</code>的空间（见<a class=link href=https://blacker1230.github.io/2022/06/06/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/ target=_blank rel=noopener>golang常见类型字节数</a>)，因此需要使用<code>sarg2</code>来取<code>student</code>的值，而非直觉上的<code>sarg1</code>。<br>整个过程比较简单、明了。只要拥有<code>root</code>权限，基本上可以对系统内的任何进程进行详细的分析。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/golang/>Golang</a>
+<a href=/tags/uprobe/>Uprobe</a>
+<a href=/tags/bpf/>Bpf</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/ebpf-tail-calls%E7%A4%BA%E4%BE%8B/><div class=article-details><h2 class=article-title>eBPF tail-calls示例</h2></div></a></article><article><a href=/p/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/><div class=article-details><h2 class=article-title>golang 常见类型字节数</h2></div></a></article><article><a href=/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/><div class=article-details><h2 class=article-title>BPF 获取 LVS FullNat 模式下的 Client IP</h2></div></a></article><article><a href=/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/><div class=article-details><h2 class=article-title>ebpf 采集ebpf 采集tag+tcp五元组</h2></div></a></article><article><a href=/p/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/><div class=article-details><h2 class=article-title>ebpf采集mysql请求信息及ebpf对应用安全的思考</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

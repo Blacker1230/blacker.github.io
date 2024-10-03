@@ -1,0 +1,781 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 即将过去的2022年，笔者相当比例的精力都投入在了eBPF上。最初的时候，写了一篇golang 常见类型字节数 ，开启了eBPF+golang的总结性工作。此后陆续整理了一些关于ebpf的使用文章，同时项目也在逐步的推进。eBPF的实际落地有很大的挑战，但是最终还是找到了一些落地的场景。年底了，结合最近的调研工作，笔者整理了这篇文章。既算是对之前文章的呼应，也是对今年整理内容的总结。\neBPF能够提供一种切入服务细节的独特视角。本文即通过实例，对golang常见类型作为函数参数时进行解析，期望读者能够感受这一视角。需要说明的是，本文是基于golang-1.16来整理的。\n"><title>golang常见类型作为参数的eBPF解析</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="golang常见类型作为参数的eBPF解析"><meta property='og:description' content=" 即将过去的2022年，笔者相当比例的精力都投入在了eBPF上。最初的时候，写了一篇golang 常见类型字节数 ，开启了eBPF+golang的总结性工作。此后陆续整理了一些关于ebpf的使用文章，同时项目也在逐步的推进。eBPF的实际落地有很大的挑战，但是最终还是找到了一些落地的场景。年底了，结合最近的调研工作，笔者整理了这篇文章。既算是对之前文章的呼应，也是对今年整理内容的总结。\neBPF能够提供一种切入服务细节的独特视角。本文即通过实例，对golang常见类型作为函数参数时进行解析，期望读者能够感受这一视角。需要说明的是，本文是基于golang-1.16来整理的。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='bpf'><meta property='article:tag' content='golang'><meta property='article:published_time' content='2022-12-30T19:24:18+00:00'><meta property='article:modified_time' content='2022-12-30T19:24:18+00:00'><meta name=twitter:title content="golang常见类型作为参数的eBPF解析"><meta name=twitter:description content=" 即将过去的2022年，笔者相当比例的精力都投入在了eBPF上。最初的时候，写了一篇golang 常见类型字节数 ，开启了eBPF+golang的总结性工作。此后陆续整理了一些关于ebpf的使用文章，同时项目也在逐步的推进。eBPF的实际落地有很大的挑战，但是最终还是找到了一些落地的场景。年底了，结合最近的调研工作，笔者整理了这篇文章。既算是对之前文章的呼应，也是对今年整理内容的总结。\neBPF能够提供一种切入服务细节的独特视角。本文即通过实例，对golang常见类型作为函数参数时进行解析，期望读者能够感受这一视角。需要说明的是，本文是基于golang-1.16来整理的。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/>golang常见类型作为参数的eBPF解析</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Dec 30, 2022</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 6 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>即将过去的2022年，笔者相当比例的精力都投入在了eBPF上。最初的时候，写了一篇<a class=link href=https://liyan-ah.github.io/2022/06/06/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/ target=_blank rel=noopener>golang 常见类型字节数
+</a>，开启了<code>eBPF+golang</code>的总结性工作。此后陆续整理了一些关于<code>ebpf</code>的使用文章，同时项目也在逐步的推进。<code>eBPF</code>的实际落地有很大的挑战，但是最终还是找到了一些落地的场景。年底了，结合最近的调研工作，笔者整理了这篇文章。既算是对之前文章的呼应，也是对今年整理内容的总结。</p></blockquote><p><code>eBPF</code>能够提供一种切入服务细节的独特视角。本文即通过实例，对<code>golang</code>常见类型作为函数参数时进行解析，期望读者能够感受这一视角。需要说明的是，本文是基于<code>golang-1.16</code>来整理的。</p><h1 id=数值类型><a href=#%e6%95%b0%e5%80%bc%e7%b1%bb%e5%9e%8b>#</a>
+数值类型</h1><p>目前<code>golang</code>支持的数值类型大概有<code>int</code>, <code>int8</code>, <code>int16</code>, <code>int32</code>, <code>int64</code>及相对应的无符号类型。无符号类型在传递时和对应的有符号类型是一致的，这里不再赘述。<code>int</code>在不同平台上大小会不同，<code>64</code>位操作系统时，<code>sizeof(int)=sizeof(int64)</code>。作为参数传递时，数值类型会直接传递值。<br>一般来说，<code>int8</code>, <code>int16</code>, <code>int32</code>在作为参数传递时，基于内存对齐的原则，会使用<code>8B</code>的空间来传递。但是并不绝对，笔者在准备本篇文章时，就找到了这样的示例：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// 如果严格按照&#34;内存对齐&#34;来推算，int_p 的参数大小应为 8B*5
+</span></span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>int_p</span><span class=p>(</span><span class=nx>a</span> <span class=kt>int8</span><span class=p>,</span> <span class=nx>b</span> <span class=kt>int16</span><span class=p>,</span> <span class=nx>c</span> <span class=kt>int32</span><span class=p>,</span> <span class=nx>d</span> <span class=kt>int64</span><span class=p>,</span> <span class=nx>e</span> <span class=kt>int</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>a</span><span class=p>,</span> <span class=nx>b</span><span class=p>,</span> <span class=nx>c</span><span class=p>,</span> <span class=nx>d</span><span class=p>,</span> <span class=nx>e</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nf>int_p</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>5</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=cm>/* 
+</span></span></span><span class=line><span class=cl><span class=cm>从输出结果来看，int_p 参数列表带大小为 3*8B，其中第一个 8B 的分布为：
+</span></span></span><span class=line><span class=cl><span class=cm> |int8|--|int16|int32|
+</span></span></span><span class=line><span class=cl><span class=cm> | 1B |1B| 2B  | 4B  |
+</span></span></span><span class=line><span class=cl><span class=cm> type/type.bt
+</span></span></span><span class=line><span class=cl><span class=cm>*/</span>
+</span></span><span class=line><span class=cl><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.int_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;int8:  %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=p>(</span><span class=kt>int8</span><span class=p>)(</span><span class=nx>sarg0</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;int16: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=p>(</span><span class=kt>int16</span><span class=p>)(</span><span class=nx>sarg0</span><span class=o>&gt;&gt;</span><span class=mi>16</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;int32: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=p>(</span><span class=kt>int32</span><span class=p>)(</span><span class=nx>sarg0</span><span class=o>&gt;&gt;</span><span class=mi>32</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;int64: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg1</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;int:   %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg2</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// 运行结果
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=kt>int8</span><span class=p>:</span>  <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=kt>int16</span><span class=p>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=kt>int32</span><span class=p>:</span> <span class=mi>3</span>
+</span></span><span class=line><span class=cl><span class=kt>int64</span><span class=p>:</span> <span class=mi>4</span>
+</span></span><span class=line><span class=cl><span class=kt>int</span><span class=p>:</span>   <span class=mi>5</span>
+</span></span></code></pre></td></tr></table></div></div><p>由此可知，当数值类型作为函数参数时，需要结合前后参数来判断是否触发了内存对齐，进而判断数值类型参数的具体位置。</p><h1 id=string><a href=#string>#</a>
+string</h1><p><code>string</code>是由<code>8B addr + 8B length</code>来描述的。作为函数参数传递时，亦通过这样的方式来解析：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>string_p</span><span class=p>(</span><span class=nx>name</span> <span class=kt>string</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>name</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>name</span> <span class=o>:=</span> <span class=nb>string</span><span class=p>(</span><span class=s>&#34;didi&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=nf>string_p</span><span class=p>(</span><span class=nx>name</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.string_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;addr:   %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;length: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg1</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;name:   %s
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nf>str</span><span class=p>(</span><span class=nx>sarg0</span><span class=p>,</span> <span class=nx>sarg1</span><span class=p>));</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>addr</span><span class=p>:</span>   <span class=mi>4958864</span>        <span class=c1>// 所谓的地址，就是这么个东西 @V@
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>length</span><span class=p>:</span> <span class=mi>4</span>
+</span></span><span class=line><span class=cl><span class=nx>name</span><span class=p>:</span>   <span class=nx>didi</span>
+</span></span></code></pre></td></tr></table></div></div><p>由于<code>string</code>的地址和长度都是<code>8B</code>，所以不会触发内存对齐。</p><h1 id=slice><a href=#slice>#</a>
+slice</h1><p><code>slice</code>是由<code>8B addr + 8B length + 8B cap</code>来描述的。作为函数值来传递时，需要关注地址及长度，以防止出现过解析的情况：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>slice_p</span><span class=p>(</span><span class=nx>slices</span> <span class=p>[]</span><span class=kt>int64</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>slices</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>slices</span> <span class=o>:=</span> <span class=p>[]</span><span class=kt>int64</span><span class=p>{</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nf>slice_p</span><span class=p>(</span><span class=nx>slices</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.slice_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;addr:   %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;length: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg1</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;cap:    %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg2</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>pos</span> <span class=p>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>offset</span> <span class=p>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=nf>unroll</span><span class=p>(</span><span class=mi>10</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>        <span class=k>if</span> <span class=p>(</span><span class=err>$</span><span class=nx>pos</span> <span class=o>&gt;=</span> <span class=nx>sarg1</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>            <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>value</span> <span class=p>=</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=nx>sarg0</span><span class=o>+</span><span class=err>$</span><span class=nx>offset</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>        <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;%d: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=err>$</span><span class=nx>pos</span><span class=p>,</span> <span class=err>$</span><span class=nx>value</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>offset</span> <span class=p>=</span> <span class=err>$</span><span class=nx>offset</span><span class=o>+</span><span class=mi>8</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>pos</span> <span class=p>=</span> <span class=err>$</span><span class=nx>pos</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>addr</span><span class=p>:</span>   <span class=mi>1310720</span>
+</span></span><span class=line><span class=cl><span class=nx>length</span><span class=p>:</span> <span class=mi>3</span>
+</span></span><span class=line><span class=cl><span class=nx>cap</span><span class=p>:</span>    <span class=mi>3</span>
+</span></span><span class=line><span class=cl><span class=mi>0</span><span class=p>:</span> <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=mi>1</span><span class=p>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=mi>2</span><span class=p>:</span> <span class=mi>3</span>
+</span></span></code></pre></td></tr></table></div></div><p>由于<code>eBPF</code>对循环的长度是有限制的，所以通过循环来读取数据会麻烦。一般可以直接将所有的数据都读出来，记录长度并将其传递到用户空间处理。</p><h1 id=定长数组><a href=#%e5%ae%9a%e9%95%bf%e6%95%b0%e7%bb%84>#</a>
+定长数组</h1><p><code>golang</code>的定长数组在传递时，会直接将数据拷贝上去。所以一般是不建议使用定长数组作为函数参数。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>array_p</span><span class=p>(</span><span class=nx>slices</span> <span class=p>[</span><span class=mi>4</span><span class=p>]</span><span class=kt>int64</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>slices</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>arrays</span> <span class=o>:=</span> <span class=p>[</span><span class=mi>4</span><span class=p>]</span><span class=kt>int64</span><span class=p>{</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nf>array_p</span><span class=p>(</span><span class=nx>arrays</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.array_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;arr[0]: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;arr[1]: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg1</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;arr[2]: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg2</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;arr[3]: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg3</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>arr</span><span class=p>[</span><span class=mi>0</span><span class=p>]:</span> <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=nx>arr</span><span class=p>[</span><span class=mi>1</span><span class=p>]:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=nx>arr</span><span class=p>[</span><span class=mi>2</span><span class=p>]:</span> <span class=mi>3</span>
+</span></span><span class=line><span class=cl><span class=nx>arr</span><span class=p>[</span><span class=mi>3</span><span class=p>]:</span> <span class=mi>4</span>
+</span></span></code></pre></td></tr></table></div></div><p>需要注意的是，定长数组作为结构体参数时，也是直接将参数堆积的，而不是类似<code>slice</code>的由指针及长度组成。</p><h1 id=结构体><a href=#%e7%bb%93%e6%9e%84%e4%bd%93>#</a>
+结构体</h1><p><code>golang</code>结构体作为函数参数传递时，会直接将结构体内的成员逐个传递。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>type</span> <span class=nx>S</span> <span class=kd>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>X</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>Y</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>Z</span> <span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>A</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// 请注意 other 参数，虽然其作为函数的第二个参数，但其在函数列表中的偏移量是 48B
+</span></span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>struct_p</span><span class=p>(</span><span class=nx>s</span> <span class=nx>S</span><span class=p>,</span> <span class=nx>other</span> <span class=kt>int64</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>s</span><span class=p>,</span> <span class=nx>other</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>s</span> <span class=o>:=</span> <span class=nx>S</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>X</span><span class=p>:</span> <span class=mi>1</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=nx>Y</span><span class=p>:</span> <span class=mi>2</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=nx>Z</span><span class=p>:</span> <span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=kt>int64</span><span class=p>{</span><span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>5</span><span class=p>},</span>
+</span></span><span class=line><span class=cl>		<span class=nx>A</span><span class=p>:</span> <span class=mi>6</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nf>struct_p</span><span class=p>(</span><span class=nx>s</span><span class=p>,</span> <span class=mi>7</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.struct_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;X: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;Y: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg1</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;A: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg5</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;other: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg6</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>X</span><span class=p>:</span> <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=nx>Y</span><span class=p>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=nx>A</span><span class=p>:</span> <span class=mi>6</span>
+</span></span><span class=line><span class=cl><span class=nx>other</span><span class=p>:</span> <span class=mi>7</span>
+</span></span></code></pre></td></tr></table></div></div><p>结构体作为函数参数，往往会涉及到内存对齐的问题。需要逐个分析了。</p><h1 id=指针><a href=#%e6%8c%87%e9%92%88>#</a>
+指针</h1><p><code>golang</code>指针作为函数参数时，会直接传递指针数值。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>type</span> <span class=nx>P</span> <span class=kd>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>X</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>Y</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>Z</span> <span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>A</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>pointer_p</span><span class=p>(</span><span class=nx>p</span> <span class=o>*</span><span class=nx>P</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=o>*</span><span class=nx>p</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>p</span> <span class=o>:=</span> <span class=o>&amp;</span><span class=nx>P</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>X</span><span class=p>:</span> <span class=mi>1</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=nx>Y</span><span class=p>:</span> <span class=mi>2</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=nx>Z</span><span class=p>:</span> <span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=kt>int64</span><span class=p>{</span><span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>5</span><span class=p>},</span>
+</span></span><span class=line><span class=cl>		<span class=nx>A</span><span class=p>:</span> <span class=mi>6</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nf>pointer_p</span><span class=p>(</span><span class=nx>p</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.pointer_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>p</span> <span class=p>=</span> <span class=nx>sarg0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;X: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>p</span><span class=o>+</span><span class=mi>0</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;Y: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>p</span><span class=o>+</span><span class=mi>8</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;A: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>p</span><span class=o>+</span><span class=mi>40</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>X</span><span class=p>:</span> <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=nx>Y</span><span class=p>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=nx>A</span><span class=p>:</span> <span class=mi>6</span>
+</span></span></code></pre></td></tr></table></div></div><p>解析<code>golang</code>指针成员的时候，需要提前知晓指针结构体的内容。</p><h1 id=map><a href=#map>#</a>
+map</h1><p><code>golang</code>的<code>map</code>实现比较复杂，详细的介绍可以看下这篇文章：<a class=link href=https://golang.design/go-questions/map/principal/ target=_blank rel=noopener>golang map</a>。<code>map</code>作为参数传递时，实际上传递的是<code>hmap</code>的指针。<br>由于<code>golang</code>的<code>map</code>实际的结构及具体结构体的大小会受到<code>map key, map value</code>的影响，这对使用<code>eBPF</code>来解析<code>golang map</code>带来了额外的挑战。所幸本文并不期望提供一个<code>golang map</code>解析的通用方法，我们可以提前定义所需要解析的<code>map</code>为<code>map[int64]int64</code>，在这个条件下，<code>bmap</code>的结构就为：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// sizeof(bmap) = 144B
+</span></span><span class=line><span class=cl>type bmap struct {
+</span></span><span class=line><span class=cl>    topbits  [8]uint8 // 8B
+</span></span><span class=line><span class=cl>    keys     [8]int64 // 64B
+</span></span><span class=line><span class=cl>    values   [8]int64 // 64B
+</span></span><span class=line><span class=cl>    //pad      uintptr //不需要添加内存对齐参数
+</span></span><span class=line><span class=cl>    overflow uintptr
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>确定了<code>bmap</code>的信息后，可以看到，<code>keys</code>及<code>values</code>的偏移信息就确定了，可以直接读取。但是由于<code>key</code>实际映射时是通过<code>hash</code>来决定其位置的，完整的读取<code>map</code>显然是很困难的。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>map_p</span><span class=p>(</span><span class=nx>m</span> <span class=kd>map</span><span class=p>[</span><span class=kt>int64</span><span class=p>]</span><span class=kt>int64</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>m</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>m</span> <span class=o>:=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>int64</span><span class=p>]</span><span class=kt>int64</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=nx>i</span> <span class=o>:=</span> <span class=nb>int64</span><span class=p>(</span><span class=mi>1</span><span class=p>);</span> <span class=nx>i</span> <span class=o>&lt;=</span> <span class=nb>int64</span><span class=p>(</span><span class=mi>10</span><span class=p>);</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>m</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=p>=</span> <span class=nx>i</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nf>map_p</span><span class=p>(</span><span class=nx>m</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.map_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>hmap_addr</span> <span class=p>=</span> <span class=nx>sarg0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>bucket_addr</span> <span class=p>=</span> <span class=o>*</span><span class=p>(</span><span class=kt>uint64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>hmap_addr</span><span class=o>+</span><span class=mi>16</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>bucket_offset</span> <span class=p>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=nf>unroll</span><span class=p>(</span><span class=mi>2</span><span class=p>){</span> <span class=c1>// 尝试读取两个 bmap
+</span></span></span><span class=line><span class=cl><span class=c1></span>        <span class=err>$</span><span class=nx>bmap_addr</span> <span class=p>=</span> <span class=err>$</span><span class=nx>bucket_addr</span> <span class=o>+</span> <span class=err>$</span><span class=nx>bucket_offset</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>key_addr</span> <span class=p>=</span> <span class=err>$</span><span class=nx>bmap_addr</span> <span class=o>+</span> <span class=mi>8</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>value_addr</span> <span class=p>=</span> <span class=err>$</span><span class=nx>bmap_addr</span> <span class=o>+</span> <span class=mi>72</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>offset</span> <span class=p>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=nf>unroll</span><span class=p>(</span><span class=mi>8</span><span class=p>){</span> <span class=c1>// 读取每个 bmap 的所有 key-value
+</span></span></span><span class=line><span class=cl><span class=c1></span>            <span class=err>$</span><span class=nx>key</span> <span class=p>=</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>key_addr</span><span class=o>+</span><span class=err>$</span><span class=nx>offset</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>            <span class=err>$</span><span class=nx>value</span> <span class=p>=</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>value_addr</span><span class=o>+</span><span class=err>$</span><span class=nx>offset</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>            <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;key: %d, value: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=err>$</span><span class=nx>key</span><span class=p>,</span> <span class=err>$</span><span class=nx>value</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>            <span class=err>$</span><span class=nx>offset</span> <span class=p>=</span> <span class=err>$</span><span class=nx>offset</span> <span class=o>+</span> <span class=mi>8</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>        <span class=err>$</span><span class=nx>bucket_offset</span> <span class=p>=</span> <span class=err>$</span><span class=nx>bucket_offset</span> <span class=o>+</span> <span class=mi>144</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// 笔者的这次运行，把[1,10]所有的key都输出了
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>2</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>3</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>3</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>5</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>5</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>6</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>6</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>7</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>7</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>8</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>8</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>9</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>9</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>10</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>10</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>1</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>4</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>4</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>0</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>0</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>0</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>0</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>0</span>
+</span></span><span class=line><span class=cl><span class=nx>key</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=nx>value</span><span class=p>:</span> <span class=mi>0</span>
+</span></span></code></pre></td></tr></table></div></div><p>使用<code>eBPF</code>来读取<code>map</code>，不得不预设一个确定的大小。至于是否能够读取所有的<code>map</code>值，就不好说了。</p><h1 id=interface><a href=#interface>#</a>
+interface</h1><p><code>golang</code>的<code>interface</code>是由<code>8B type pointer</code>+<code>8B struct pointer</code>组成的。当解析<code>interface</code>的时候，需要的往往是<code>struct pointer</code>。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// type/main.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>type</span> <span class=nx>Inter</span> <span class=kd>interface</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>type</span> <span class=nx>S</span> <span class=kd>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>X</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>Y</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>Z</span> <span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=kt>int64</span>
+</span></span><span class=line><span class=cl>	<span class=nx>A</span> <span class=kt>int64</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>//go:noinline
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>func</span> <span class=nf>struct_p</span><span class=p>(</span><span class=nx>i</span> <span class=nx>Inter</span><span class=p>,</span> <span class=nx>other</span> <span class=kt>int64</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>s</span><span class=p>,</span> <span class=nx>_</span> <span class=o>:=</span> <span class=nx>i</span><span class=p>.(</span><span class=nx>S</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>s</span><span class=p>,</span> <span class=nx>other</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>s</span> <span class=o>:=</span> <span class=nx>S</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>X</span><span class=p>:</span> <span class=mi>1</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=nx>Y</span><span class=p>:</span> <span class=mi>2</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=nx>Z</span><span class=p>:</span> <span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=kt>int64</span><span class=p>{</span><span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>5</span><span class=p>},</span>
+</span></span><span class=line><span class=cl>		<span class=nx>A</span><span class=p>:</span> <span class=mi>6</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nf>struct_p</span><span class=p>(</span><span class=nx>s</span><span class=p>,</span> <span class=mi>7</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>// type/type.bt
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=nx>uprobe</span><span class=p>:.</span><span class=o>/</span><span class=kd>type</span><span class=p>:</span><span class=s>&#34;main.struct_p&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=err>$</span><span class=nx>addr</span> <span class=p>=</span> <span class=nx>sarg1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;X: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>addr</span><span class=o>+</span><span class=mi>0</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;Y: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>addr</span><span class=o>+</span><span class=mi>8</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;A: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=o>*</span><span class=p>(</span><span class=kt>int64</span><span class=o>*</span><span class=p>)(</span><span class=err>$</span><span class=nx>addr</span><span class=o>+</span><span class=mi>40</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;other: %d
+</span></span></span><span class=line><span class=cl><span class=s>&#34;</span><span class=p>,</span> <span class=nx>sarg2</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>bpftrace</span> <span class=p>.</span><span class=o>/</span><span class=kd>type</span><span class=p>.</span><span class=nx>bt</span>
+</span></span><span class=line><span class=cl><span class=nx>Attaching</span> <span class=mi>1</span> <span class=nx>probe</span><span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=nx>X</span><span class=p>:</span> <span class=mi>1</span>
+</span></span><span class=line><span class=cl><span class=nx>Y</span><span class=p>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl><span class=nx>A</span><span class=p>:</span> <span class=mi>6</span>
+</span></span><span class=line><span class=cl><span class=nx>other</span><span class=p>:</span> <span class=mi>7</span>
+</span></span></code></pre></td></tr></table></div></div><p>从示例中可以看出，当解析<code>interface</code>时，<code>interface</code>具体的结构体成员对我们而言更加重要。在实际的工程里，往往会出现多个结构体实现同一个<code>interface</code>，并且均可以作为该<code>interface</code>来传递值的情况。这时就需要依据所实际期望解析的结构体来进行实际采集的过滤或者适配了。</p><h1 id=写在最后><a href=#%e5%86%99%e5%9c%a8%e6%9c%80%e5%90%8e>#</a>
+写在最后</h1><p>本文编写的文章超过了笔者的估计时间 :)。<code>anyway</code>，这篇文章最终整理完成了。期望有读者能够籍此对<code>eBPF</code>有直观的认识，同时体会到其观察<code>golang</code>的独特视角。<br>周末愉快，新年快乐！</p></section><footer class=article-footer><section class=article-tags><a href=/tags/bpf/>Bpf</a>
+<a href=/tags/golang/>Golang</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/><div class=article-details><h2 class=article-title>如何追踪golang channel?</h2></div></a></article><article><a href=/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/><div class=article-details><h2 class=article-title>BPF追踪Go程序的挑战</h2></div></a></article><article><a href=/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/><div class=article-details><h2 class=article-title>基于ebpf实现的gls</h2></div></a></article><article><a href=/p/bpf-lru_hash_map-%E5%8F%8A-hash_map-%E7%9A%84%E4%BD%BF%E7%94%A8%E5%BC%82%E5%B8%B8/><div class=article-details><h2 class=article-title>BPF LRU_HASH_MAP 及 HASH_MAP 的使用异常</h2></div></a></article><article><a href=/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/><div class=article-details><h2 class=article-title>go-1.17+ 调用规约</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

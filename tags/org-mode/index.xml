@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Org-Mode on 李岩</title><link>https://liyan-ah.github.io/tags/org-mode/</link><description>Recent content in Org-Mode on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Mon, 11 Jan 2021 21:49:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/org-mode/index.xml" rel="self" type="application/rss+xml"/><item><title>org-mode使用备注</title><link>https://liyan-ah.github.io/p/org-mode%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</link><pubDate>Mon, 11 Jan 2021 21:49:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/org-mode%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</guid><description>&lt;blockquote>
+&lt;p>org-mode agenda界面变更任务状态、添加备注、添加日记（每日总结）、编辑记录&lt;/p>
+&lt;/blockquote>
+&lt;p>以下操作均在&lt;code>org-agenda&lt;/code>中的&lt;code>agenda for current week or day&lt;/code>视图下快速编辑：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">操作&lt;/th>
+&lt;th style="text-align: left">快捷键&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">变更任务状态&lt;/td>
+&lt;td style="text-align: left">t&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">添加备注&lt;/td>
+&lt;td style="text-align: left">z&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">添加日记&lt;/td>
+&lt;td style="text-align: left">i&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">编辑note&lt;/td>
+&lt;td style="text-align: left">z&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">重建agenda&lt;/td>
+&lt;td style="text-align: left">r&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">打开日历&lt;/td>
+&lt;td style="text-align: left">a&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">下周任务列表&lt;/td>
+&lt;td style="text-align: left">f&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">上周任务列表&lt;/td>
+&lt;td style="text-align: left">b&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">打开任务所在原始文件&lt;/td>
+&lt;td style="text-align: left">enter&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table></description></item><item><title>emacs! start org-mode! --org-mode使用备注</title><link>https://liyan-ah.github.io/p/emacs-start-org-mode--org-mode%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</link><pubDate>Sun, 10 Jan 2021 20:30:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/emacs-start-org-mode--org-mode%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</guid><description>&lt;blockquote>
+&lt;p>为了更好的&lt;code>live in emacs&lt;/code>，一款合适的日程管理工具总是需要的。在挣扎了若干次后，最终还是把&lt;code>org-mode&lt;/code>这一优秀的日程管理工具捡起来了。本文简单记录下使用的方法。&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="org-mode介绍">
+&lt;a href="#org-mode%e4%bb%8b%e7%bb%8d">#&lt;/a>
+org-mode介绍
+&lt;/h1>&lt;p>在&lt;code>神的编辑器emacs&lt;/code>的传说中，往往有&lt;code>org-mode&lt;/code>的身影。虽然按照(org官网)&lt;a class="link" href="https://orgmode.org/" target="_blank" rel="noopener"
+>orgmode&lt;/a>官网的描述，&lt;code>org-mode&lt;/code>并不仅限于在&lt;code>emacs&lt;/code>中使用，如&lt;a class="link" href="https://zhuanlan.zhihu.com/p/57800574" target="_blank" rel="noopener"
+>开始使用 Org 模式吧，在没有 Emacs 的情况下&lt;/a>这篇文章就详细讲解了在&lt;code>vscode&lt;/code>中使用&lt;code>org-mode&lt;/code>的方式，但是配合&lt;code>emacs&lt;/code>的万物皆系于&lt;code>kbd&lt;/code>之上的使用习惯，&lt;code>org-mode&lt;/code>确实能够发挥最大的功能。&lt;br>
+&lt;code>org-mode&lt;/code>的基本功能包括设置待办事项、设置待办的标签、查看日历、查看某一天的待办及进度。基本上，满足了对优秀日程管理工具的所有想象。&lt;/p>
+&lt;p>这里贴一下&lt;a class="link" href="https://wizardforcel.gitbooks.io/os-world-trip/content/42.html" target="_blank" rel="noopener"
+>开源世界旅行手册&lt;/a>中涉及的&lt;code>org-mode&lt;/code>与&lt;code>oneNote&lt;/code>的对比，能够更加直观的了解&lt;code>org-mode&lt;/code>的功能：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">org-mode vs oneNote&lt;/th>
+&lt;th style="text-align: left">&lt;/th>
+&lt;th style="text-align: left">&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">&lt;/td>
+&lt;td style="text-align: left">Org-mode&lt;/td>
+&lt;td style="text-align: left">OneNote&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">标签&lt;/td>
+&lt;td style="text-align: left">强大&lt;/td>
+&lt;td style="text-align: left">不支持&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">日程表&lt;/td>
+&lt;td style="text-align: left">强大&lt;/td>
+&lt;td style="text-align: left">不支持&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">界面&lt;/td>
+&lt;td style="text-align: left">字符&lt;/td>
+&lt;td style="text-align: left">漂亮&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">TablePC&lt;/td>
+&lt;td style="text-align: left">不支持&lt;/td>
+&lt;td style="text-align: left">非常好&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">摘录&lt;/td>
+&lt;td style="text-align: left">保持源格式&lt;/td>
+&lt;td style="text-align: left">&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">便捷&lt;/td>
+&lt;td style="text-align: left">Emacs 内置&lt;/td>
+&lt;td style="text-align: left">安装麻烦&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h1 id="基本使用流程">
+&lt;a href="#%e5%9f%ba%e6%9c%ac%e4%bd%bf%e7%94%a8%e6%b5%81%e7%a8%8b">#&lt;/a>
+基本使用流程
+&lt;/h1>&lt;p>目前还处于探索阶段了，简单描述下&lt;code>org-mode&lt;/code>的配置流程。
+0. 版本
+使用的是&lt;code>emacs-27.1&lt;/code>版本，默认内置了&lt;code>org-mode&lt;/code>(值得一提的是，当我在写一篇文章时，发现hexo#admin编辑器是支持部分&lt;code>emacs&lt;/code>快捷键的，又反映了&lt;code>emacs&lt;/code>影响之广)。&lt;/p>
+&lt;ol>
+&lt;li>设置&lt;br>
+&lt;code>org-mode&lt;/code>在使用时，一般是在文本文档中编辑待办内容，将待办内容加入&lt;code>org-mode&lt;/code>的日程表。而后通过&lt;code>org-agenda&lt;/code>来查看指定日期的待办内容，并随着待办内容设置事务的进度。&lt;br>
+使用前，如果是使用&lt;code>emacs&lt;/code>进行编辑的话，可以在&lt;code>emacs&lt;/code>配置文件中作如下设置：&lt;/li>
+&lt;/ol>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;; 将.org结尾的文档，均以org-mode打开
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-to-list &amp;#39;auto-mode-alist &amp;#39;(&amp;#34;\.org\&amp;#39;&amp;#34; . org-mode))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; 将org-agenda绑定为Ctrl-c a 快捷键
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(global-set-key (kbd &amp;#34;C-c a&amp;#34;) &amp;#39;org-agenda)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>重新打开&lt;code>emacs&lt;/code>使配置生效，重新载入&lt;code>emacs&lt;/code>配置文件即可。
+使用时，可以单独建立一个文件夹，来存储不同需求的日程文档（如，笔者在&lt;code>~/.org/&lt;/code>目录下创建了&lt;code>2021.org&lt;/code>,&lt;code>learn.org&lt;/code>等多个文档）。以下是一个简单的待办文档内容（引用自&lt;a class="link" href="https://wizardforcel.gitbooks.io/os-world-trip/content/42.html" target="_blank" rel="noopener"
+>文章3&lt;/a>）：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">#+STARTUP: overview
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#+TAGS: { 桌面(d) 服务器(s) } 编辑器(e) 浏览器(f) 多媒体(m) 压缩(z)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#+TAGS: { @Windows(w) @Linux(l) }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#+TAGS: { 糟糕(1) 凑合(2) 不错(3) 很好(4) 极品(5) }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#+SEQ_TODO: TODO(T) WAIT(W) | DONE(D!) CANCELED(C@)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#+COLUMNS: %10ITEM %10PRIORITY %15TODO %65TAGS
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">* 工作 &amp;lt;2021-01-10&amp;gt;-&amp;lt;2022-01-10&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">** Emacs &amp;lt;2021-01-10 21:00 ++1d&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 神之编辑器
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*** org-mode
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 组织你的意念
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>（更多的内容可以查看下&lt;a class="link" href="https://wizardforcel.gitbooks.io/os-world-trip/content/42.html" target="_blank" rel="noopener"
+>原文&lt;/a>，本文仅简单介绍）
+以&lt;code>#+&lt;/code>开头的可以认为是本地设置内容。&lt;code>#+TAGS: &lt;/code>后设置的内容，是本日程中预设的日程标签，标签&lt;code>()&lt;/code>中的是该标签的缩写，需要保持唯一。在下面的日程（或者&lt;code>标题&lt;/code>，可以很容易的看出来，和&lt;code>markdown&lt;/code>是类似的语法）上使用快捷键&lt;code>Ctrl-c Ctrl-c&lt;/code>(或者说，&lt;code>C-c C-c&lt;/code>)，即可给日程打上标签。每个&lt;code>{}&lt;/code>内的标签是互斥的，在设置时，可以注意下。&lt;br>
+下面的日程中,&lt;code>&amp;lt;2021-01-10&amp;gt;-&amp;lt;2022-01-10&amp;gt;&lt;/code>表示该事件时间范围为&lt;code>2021-01-10&lt;/code>至&lt;code>2022-01-10&lt;/code>结束。&lt;code>&amp;lt;2021-01-10 21:00 ++1d&amp;gt;&lt;/code>表示这个子任务的时间开始于&lt;code>2021-01-10 21:00&lt;/code>而后每天重复一次(++1w，++1m为周、月，以此类推)。&lt;br>
+而后，保存文件。使用&lt;code>Ctrl-c [&lt;/code>将当前日程文件纳入&lt;code>org-mode&lt;/code>的日程表。使用前面配置的快捷键&lt;code>C-c a&lt;/code>唤出日历，会出现如下提示：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">Press key for an agenda command:&lt;/th>
+&lt;th style="text-align: left">&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">a&lt;/td>
+&lt;td style="text-align: left">本周事件&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">t&lt;/td>
+&lt;td style="text-align: left">显示所有事件&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">m&lt;/td>
+&lt;td style="text-align: left">查询标签&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">L&lt;/td>
+&lt;td style="text-align: left">当前缓冲区时间线&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">s&lt;/td>
+&lt;td style="text-align: left">查询关键词&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">T&lt;/td>
+&lt;td style="text-align: left">查询带 TODO 关键词的项&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">M&lt;/td>
+&lt;td style="text-align: left">查询带 TODO 关键词的标签&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">#&lt;/td>
+&lt;td style="text-align: left">显示已停止事件&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">q&lt;/td>
+&lt;td style="text-align: left">退出日程表&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">选择&lt;code>a&lt;/code>，可以查看本周的事件。如果已经到了所设置的事件区间，即可看到我们设置的事件内容。&lt;/td>
+&lt;td style="text-align: left">&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">以上算是简单的入门了。&lt;/td>
+&lt;td style="text-align: left">&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h1 id="相关文章">
+&lt;a href="#%e7%9b%b8%e5%85%b3%e6%96%87%e7%ab%a0">#&lt;/a>
+相关文章
+&lt;/h1>&lt;ol>
+&lt;li>&lt;a class="link" href="https://victor72.github.io/blog/2016/06/20/with-org-page-manage-lives/" target="_blank" rel="noopener"
+>使用org-mode 管理日常事务- 日知录&lt;/a>&lt;/li>
+&lt;li>&lt;a class="link" href="https://www.cnblogs.com/holbrook/archive/2012/04/17/2454619.html" target="_blank" rel="noopener"
+>用Org-mode实现GTD&lt;/a>&lt;/li>
+&lt;li>&lt;a class="link" href="https://wizardforcel.gitbooks.io/os-world-trip/content/42.html" target="_blank" rel="noopener"
+>组织你的意念：Emacs org mode&lt;/a>.&lt;/li>
+&lt;/ol></description></item></channel></rss>

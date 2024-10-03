@@ -1,0 +1,620 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Rust on 李岩</title><link>https://liyan-ah.github.io/tags/rust/</link><description>Recent content in Rust on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Tue, 07 May 2024 11:39:00 +0800</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/rust/index.xml" rel="self" type="application/rss+xml"/><item><title>Cargo config 使用备注</title><link>https://liyan-ah.github.io/p/cargo-config-%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</link><pubDate>Tue, 07 May 2024 11:39:00 +0800</pubDate><guid>https://liyan-ah.github.io/p/cargo-config-%E4%BD%BF%E7%94%A8%E5%A4%87%E6%B3%A8/</guid><description>&lt;p>本文旨在回答如下问题：&lt;/p>
+&lt;ol>
+&lt;li>Rust 项目中，如何配置 dependencies 的路径为指定仓库。&lt;/li>
+&lt;li>在不指定 branch 或 version 的情况下，dependencies 会拉取什么版本/仓库里的数据。&lt;/li>
+&lt;li>Rust 项目中，配置 dependencies 的最佳实践。&lt;/li>
+&lt;/ol>
+&lt;p>以下为正文。&lt;/p>
+&lt;h2 id="如何配置-dependencies-的路径">
+&lt;a href="#%e5%a6%82%e4%bd%95%e9%85%8d%e7%bd%ae-dependencies-%e7%9a%84%e8%b7%af%e5%be%84">#&lt;/a>
+如何配置 dependencies 的路径？
+&lt;/h2>&lt;p>出于稳定性考虑，工作中使用的项目，尤其是一些开源的项目，往往无法和社区时刻保持一致。甚至，在选定了一个基线版本后，以周或者年计，主干会持续保持这个版本。有一些效果较好的“新特性”需要合入时，就需要以 patch 的形式合入。同样出于稳定性考虑，
+或者兼容性考虑，服务的依赖，甚至依赖的依赖都是无法进行升级的。如果项目的新特性需要依赖库进行变更，就只能将依赖库的基线版本单独维护，按需合入依赖库的 patch。这样的维护方式看起来较为繁琐，但是能够有效避免项目因依赖库的升级而引入新的问
+题。&lt;br>
+有了这样的需求，对应到 Rust 项目中，就需要对 Cargo.toml 里的 dependencies 配置进行调整，将部分依赖调整为自有库。
+参照&lt;a class="link" href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html" target="_blank" rel="noopener"
+>reference/specifying-dependencies&lt;/a>，可以通过如下方式来指定依赖库：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-Rust" data-lang="Rust">&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">dependencies&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">regex&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">version&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;1.10.3&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/rust-lang/regex.git&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">branch&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;next&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">rev&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;0c0990399270277832fbb5b91a1fa118e6f63dba&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tag&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;11.10.4&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>除了 git，version、branch、rev 以及 tag 都是可选的，补充四者中的一个参数即可实现分支提交控制的目的。在实践过程中，考虑到分支上的提交是时刻进行的，在确认了基础的功能后，可以考虑发布一个版本。一来可以通过 tag 来进行版本/功能的
+发布控制，同时也便于后续的功能梳理以及项目整理关键里程碑可视化。通过 branch 来指定依赖库会比较方便，这种方式对仓库的开发流程管理较为依赖：如果分支上提交了功能异常的代码，项目的编译就会异常。rev 方案也可以唯一指定代码版本，只是看起来
+不像 tag 那样直观。&lt;/p>
+&lt;h2 id="dependences-默认拉取什么版本">
+&lt;a href="#dependences-%e9%bb%98%e8%ae%a4%e6%8b%89%e5%8f%96%e4%bb%80%e4%b9%88%e7%89%88%e6%9c%ac">#&lt;/a>
+dependences 默认拉取什么版本？
+&lt;/h2>&lt;p>笔者在近期的工作中，遇到了如下的配置方式：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-Rust" data-lang="Rust">&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">dependencies&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">regex&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/rust-lang/regex.git&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这里并没有指定 version, branch 或者 rev。但是在编译项目时也会进行拉取的动作。默认会拉取目标仓库的最新提交（效果和直接 git clone 一致）。&lt;br>
+在复杂的项目中，通常会出现依赖库和依赖库的依赖有重合的情况。而Rust 工程在编译时，会通过校验目标库的 source 信息（Cargo.lock 中生成）来识别两个库是相同。当项目的依赖库的 dependence 配置和项目依赖库的依赖的 dependence 配置不同时，
+就会出现种种类型不兼容的情况。比如，目前有这样的一个项目&lt;a class="link" href="https://github.com/liyan-ah/dep-check" target="_blank" rel="noopener"
+>dep-check&lt;/a>，其依赖
+&lt;a class="link" href="https://github.com/liyan-ah/trait-lib" target="_blank" rel="noopener"
+>trait-lib&lt;/a>和&lt;a class="link" href="https://github.com/liyan-ah/middle-lib" target="_blank" rel="noopener"
+>middle-lib&lt;/a>两个库。同时，&lt;a class="link" href="https://github.com/liyan-ah/middle-lib" target="_blank" rel="noopener"
+>middle-lib&lt;/a>又对
+&lt;a class="link" href="https://github.com/liyan-ah/trait-lib" target="_blank" rel="noopener"
+>trait-lib&lt;/a>存在依赖。当&lt;a class="link" href="https://github.com/liyan-ah/dep-check" target="_blank" rel="noopener"
+>dep-check&lt;/a>使用了&lt;code>trait_lib::Check&lt;/code>，并且将该&lt;code>trait&lt;/code>通过引用
+&lt;a class="link" href="https://github.com/liyan-ah/middle-lib" target="_blank" rel="noopener"
+>middle-lib&lt;/a>里的函数进行处理时，就涉及到&lt;a class="link" href="https://github.com/liyan-ah/dep-check" target="_blank" rel="noopener"
+>dep-check&lt;/a>和&lt;a class="link" href="https://github.com/liyan-ah/middle-lib" target="_blank" rel="noopener"
+>middle-lib&lt;/a>对&lt;a class="link" href="https://github.com/liyan-ah/trait-lib" target="_blank" rel="noopener"
+>trait-lib&lt;/a>的引用校验问题：两个库里涉及的&lt;code>Check&lt;/code>是否是同一个&lt;code>Trait&lt;/code>？就笔者目前的理解来看，由于 rust 里的 trait 采用的不是 duck-typing，因此就需要编译器在编译时对类型进行强校验。在这个小示例中，如果 middle-lib
+的 dependencies 设置如下：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-Rust" data-lang="Rust">&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">dependencies&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/liyan-ah/trait-lib.git&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tag&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;1.0.0&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>而 dep-check 的 dependencies 设置如下：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-Rust" data-lang="Rust">&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">dependencies&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/liyan-ah/trait-lib.git&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tag&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;1.0.0&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">middle&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/liyan-ah/middle-lib.git&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w"> &lt;/span>#&lt;span class="w"> &lt;/span>&lt;span class="err">注意，这种配置方式在&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Cargo&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">lock&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="err">生成后，除非使用&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">cargo&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">update&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="err">触发更新，否则依赖版本不会随着代码提交而更新。&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>dep-check 编译时，其引用的&lt;code>trait_lib::Check&lt;/code>和 middle-lib 里使用的&lt;code>trait_lib::Check&lt;/code>就无法认为是同一个（即使实际上代码的提交是同一个）。依赖库的设置可以通过 Cargo.lock 里的 source 来确认。当 dep-check 和 middle-lib 的 Cargo.lock 对 trait-lib 的 source
+配置相同时，就不会出现类型不一致的问题。&lt;br>
+由于使用了 tag / rev / branch 来作为 dependencies 的配置，一个问题是当 trait-lib 发生更新时，需要同时升级 middle-lib 和 dep-check 这两个仓库。否则就会出现版本不一致而编译失败的情况。如果使用 version 控制，由于 version 实际
+上表示的是一个&lt;a class="link" href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-cratesio" target="_blank" rel="noopener"
+>范围&lt;/a>，只要 update 后的依赖库是同一个版本即可（准确来说，x.y.z 中的 x.y 保持一致即可），可
+以在 cargo update 后检查 dep-check 的 Cargo.lock 中存在几个 trait-lib。在仅存在一个 trait-lib 时，说明依赖库不存在版本冲突，此时不需要更新 middle-lib 中的 Cargo.toml。&lt;/p>
+&lt;p>配置的问题在这里有描述：&lt;a class="link" href="https://github.com/rust-lang/cargo/issues/11490" target="_blank" rel="noopener"
+>The dependency resolution is confused when using git dependency and there&amp;rsquo;s a lockfile&lt;/a>。&lt;/p>
+&lt;blockquote>
+&lt;p>duck-typing 的接口在校验时还比较简单，只需要检查是否实现了目标类型/接口定义的函数即可。但是对于非 duck-typing，情况会复杂些：不同的库里是允许出现同名的 trait 的。如何确定项目中实现的 trait 和引用库中需要的 trait 是同一个 trait？这就需要确保项目中 trait 的来源库和引用库中所需要的 trait 来源库是相同的。而看起来，库是否相同，又是通过 source 来确定的。Cargo.toml 中的 source 毕竟是一个工程里的概念，是如何影响编译的呢？是否是编译过程中，函数签名里带着一些source 信息？还需要进一步的探索，期望能够整理成文档。&lt;/p>
+&lt;/blockquote>
+&lt;h2 id="dependences-配置的最佳实践">
+&lt;a href="#dependences-%e9%85%8d%e7%bd%ae%e7%9a%84%e6%9c%80%e4%bd%b3%e5%ae%9e%e8%b7%b5">#&lt;/a>
+dependences 配置的最佳实践？
+&lt;/h2>&lt;p>golang 和 rust 都支持通过配置 git 仓库的地址来直接引用，个人还是比较喜欢 rust 的配置方式：通过 Cargo.toml 能够简洁、明了的声明各种依赖的信息，在工程里可以直接使用库名（而非 golang 里的项目地址）。此外，rust 里的 workspace 机制
+对仓库里存在多个 sub-lib 时也能较好的处理依赖的管理。&lt;br>
+下面是一个实践示例&lt;a class="link" href="https://github.com/liyan-ah/dep-check" target="_blank" rel="noopener"
+>dep-check&lt;/a>：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-Rust" data-lang="Rust">&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">workspace&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">members&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;dep-check&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;dep-run&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">default&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">members&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="s">&amp;#34;dep-check&amp;#34;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">resolver&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;2&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">workspacepackage&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">name&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;dep-check&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">version&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;0.1.0&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">edition&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;2021&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>#&lt;span class="w"> &lt;/span>&lt;span class="n">See&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">more&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">keys&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">and&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">their&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">definitions&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">at&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">https&lt;/span>:&lt;span class="c1">//doc.rust-lang.org/cargo/reference/manifest.html
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">workspace&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">dependencies&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/liyan-ah/trait-lib.git&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tag&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;1.0.0&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">middle&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">git&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;https://github.com/liyan-ah/middle-lib.git&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tag&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;1.0.0&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>对于其中的一个 member:dep-check，其配置为：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-Rust" data-lang="Rust">&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">name&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;dep-check&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">version&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;0.1.0&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">edition&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;2021&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>#&lt;span class="w"> &lt;/span>&lt;span class="n">See&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">more&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">keys&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">and&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">their&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">definitions&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">at&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">https&lt;/span>:&lt;span class="c1">//doc.rust-lang.org/cargo/reference/manifest.html
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">dependencies&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">workspace&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kc">true&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">middle&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">lib&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">workspace&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kc">true&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这样，就能很便捷的对项目里的依赖进行管理了。&lt;/p>
+&lt;p>以上。&lt;/p></description></item><item><title>合并区间</title><link>https://liyan-ah.github.io/p/%E5%90%88%E5%B9%B6%E5%8C%BA%E9%97%B4/</link><pubDate>Sat, 20 Apr 2024 17:11:31 +0800</pubDate><guid>https://liyan-ah.github.io/p/%E5%90%88%E5%B9%B6%E5%8C%BA%E9%97%B4/</guid><description>&lt;blockquote>
+&lt;p>很久没有找工作的经历了，反而由于种种原因，最近接触了一些候选人。总体的感觉是最近是越来越卷了。
+候选人的的水平明显比笔者毕业的时候高的多，也可能是笔者太菜了。其中一个合并区间的问题，笔者看到了
+一个很有意思的解法。在这里记录下。&lt;/p>
+&lt;/blockquote>
+&lt;p>《合并区间》问题的思路很明显：排序、合并。笔者最近见到了一种特殊场景下很有意思的解法：在数据范围较小的情况下，使用桶的思想来
+解决，就不再需要进行排序了。算法复杂度也从时间复杂度&lt;code>o(nlgn)&lt;/code>降到了&lt;code>o(n)&lt;/code>。这里记录下。&lt;/p>
+&lt;h2 id="题目描述">
+&lt;a href="#%e9%a2%98%e7%9b%ae%e6%8f%8f%e8%bf%b0">#&lt;/a>
+题目描述
+&lt;/h2>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">以数组 intervals 表示若干个区间的集合，其中单个区间为 intervals[i] = [starti, endi] 。请你合并所有重叠的区间，并返回 一个不重叠的区间数组，该数组需恰好覆盖输入中的所有区间 。
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">示例 1：
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">输入：intervals = [[1,3],[2,6],[8,10],[15,18]]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">输出：[[1,6],[8,10],[15,18]]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">解释：区间 [1,3] 和 [2,6] 重叠, 将它们合并为 [1,6].
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">示例 2：
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">输入：intervals = [[1,4],[4,5]]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">输出：[[1,5]]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">解释：区间 [1,4] 和 [4,5] 可被视为重叠区间。
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">提示：
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">1 &amp;lt;= intervals.length &amp;lt;= 10000
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">intervals[i].length == 2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0 &amp;lt;= starti &amp;lt;= endi &amp;lt;= 10000
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="两种解法">
+&lt;a href="#%e4%b8%a4%e7%a7%8d%e8%a7%a3%e6%b3%95">#&lt;/a>
+两种解法
+&lt;/h2>&lt;h3 id="排序">
+&lt;a href="#%e6%8e%92%e5%ba%8f">#&lt;/a>
+排序
+&lt;/h3>&lt;p>先排序，然后遍历、比较。关键点在于需要处理好比较时的边界条件。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">impl&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Solution&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">merge&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">intervals&lt;/span>: &lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="kt">i32&lt;/span>&lt;span class="o">&amp;gt;&amp;gt;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="kt">i32&lt;/span>&lt;span class="o">&amp;gt;&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="fm">vec!&lt;/span>&lt;span class="p">[];&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">intervals&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">sort_by&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">|&lt;/span>&lt;span class="n">x&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">y&lt;/span>&lt;span class="o">|&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">x&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="n">cmp&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">y&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]));&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nb">None&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">None&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">for&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">in&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">intervals&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">0.&lt;/span>&lt;span class="n">is_none&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">continue&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// [0, 1] and [1, 2]
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">1.&lt;/span>&lt;span class="n">is_some&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">&amp;amp;&amp;amp;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">1.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">&amp;gt;=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">1.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">continue&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// [0, 1] and [2, 3]
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">push&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="fm">vec!&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">0.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">(),&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">1.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">v&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">0.&lt;/span>&lt;span class="n">is_some&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">push&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="fm">vec!&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">0.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">(),&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">interval&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="mf">1.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="桶处理">
+&lt;a href="#%e6%a1%b6%e5%a4%84%e7%90%86">#&lt;/a>
+桶处理
+&lt;/h3>&lt;p>采用匹配的思路，借助桶来记录数组的各个区间。这个思路还需要再体会下。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">impl&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Solution&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">merge&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">intervals&lt;/span>: &lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="kt">i32&lt;/span>&lt;span class="o">&amp;gt;&amp;gt;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="nb">Vec&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="kt">i32&lt;/span>&lt;span class="o">&amp;gt;&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="fm">vec!&lt;/span>&lt;span class="p">[];&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">intervals&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">len&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">==&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">return&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// 0. 找出桶的范围。这一步可以去掉，直接设一个 10000 大小的桶。
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">max&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">for&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">in&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">intervals&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">max&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">max&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">];&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// 由于 rust 的枚举特性，这里就不需要使用两个 bucket 了。
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="fm">vec!&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nb">None&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">max&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">];&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">for&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">in&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">intervals&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="n">is_none&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="n">is_none&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">start&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">None&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">sum&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">usize&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">loop&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">&amp;gt;=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">len&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">break&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">bucket&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">];&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">is_none&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">continue&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">start&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">is_none&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">start&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">sum&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iter&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">if&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">sum&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">==&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">push&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="fm">vec!&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">start&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">i32&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">as&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kt">i32&lt;/span>&lt;span class="p">]);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">start&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">None&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">p&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">merged&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="后记">
+&lt;a href="#%e5%90%8e%e8%ae%b0">#&lt;/a>
+后记
+&lt;/h2>&lt;p>这个问题是&lt;code>leetcode&lt;/code>上的&lt;a class="link" href="https://leetcode.cn/problems/merge-intervals/description/" target="_blank" rel="noopener"
+>56. 合并区间&lt;/a>。一般刷题
+的人都会刷到。惭愧的是笔者已经没有印象了。得赶紧把插件修一修，有时间刷点题。&lt;/p></description></item><item><title>emacs-若干语言 lsp 配置备注</title><link>https://liyan-ah.github.io/p/emacs-%E8%8B%A5%E5%B9%B2%E8%AF%AD%E8%A8%80-lsp-%E9%85%8D%E7%BD%AE%E5%A4%87%E6%B3%A8/</link><pubDate>Tue, 12 Oct 2021 20:26:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/emacs-%E8%8B%A5%E5%B9%B2%E8%AF%AD%E8%A8%80-lsp-%E9%85%8D%E7%BD%AE%E5%A4%87%E6%B3%A8/</guid><description>&lt;blockquote>
+&lt;p>微软推出的&lt;a class="link" href="https://microsoft.github.io/language-server-protocol/#:~:text=Language%20Server%20Protocol.%20The%20Language%20Server%20Protocol%20%28LSP%29,is%20to%20support%20rich%20code%20navigation%20in%20" target="_blank" rel="noopener"
+>language server protol&lt;/a> 确实提升了文本编辑器的使用体验。就 &lt;code>emacs&lt;/code> 的使用而言，配合各个语言的 lsp 实现，能够减少配置语言开发环境的难度。这里记录一下使用 &lt;code>emacs&lt;/code> 中的 rust, golang, python, c/c++ lsp 配置&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="rust">
+&lt;a href="#rust">#&lt;/a>
+rust
+&lt;/h1>&lt;p>这里使用 &lt;code>rust-analyzer&lt;/code> 作为 &lt;code>rust&lt;/code> 的语言服务器，在安装 &lt;code>rust-mode&lt;/code>后，通过绑定语言服务器信息，即可在打开由 &lt;code>cargo&lt;/code> 创建的工程时，顺利进入 &lt;code>lsp-mode&lt;/code>。需要关注的是，在非&lt;code>cargo&lt;/code>创建的项目中，笔者的&lt;code>lsp-mode&lt;/code>使用体验很差，甚至缺少代码补充、语法提示等功能。可能是&lt;code>rust-analyzer&lt;/code>主要是针对&lt;code>cargo&lt;/code>项目进行的设置，也可能是笔者设置的问题。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go">&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="nx">config&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">lsp&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="nx">emacs&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="nx">rls&lt;/span> &lt;span class="nx">install&lt;/span> &lt;span class="nx">address&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="nx">https&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="c1">//github.com/rust-lang-nursery/rls
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nf">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kn">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">p&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">install&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">to&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">list&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">auto&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">alist&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;\.rs\&amp;#39;&amp;#34;&lt;/span> &lt;span class="p">.&lt;/span> &lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">lsp&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nf">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kn">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">p&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">install&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nf">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kn">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">p&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">cargo&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">install&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">cargo&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">use&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="kn">package&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">compatible&lt;/span> &lt;span class="nx">rust&lt;/span> &lt;span class="nf">mode&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nf">hook&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nf">lambda&lt;/span> &lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">server&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">analyzer&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">not&lt;/span> &lt;span class="nf">rls&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">analyzer&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">server&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">command&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;/opt/homebrew/bin/rust-analyzer&amp;#34;&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">format&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">on&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">save&lt;/span> &lt;span class="nx">t&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">has&lt;/span> &lt;span class="nx">annoying&lt;/span> &lt;span class="nx">bug&lt;/span> &lt;span class="nx">move&lt;/span> &lt;span class="nx">point&lt;/span> &lt;span class="nx">to&lt;/span> &lt;span class="nx">other&lt;/span> &lt;span class="nx">buffer&lt;/span> &lt;span class="nf">bug&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">indent&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">offset&lt;/span> &lt;span class="mi">4&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">match&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">angle&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">brackets&lt;/span> &lt;span class="kc">nil&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;;&lt;/span> &lt;span class="nx">thought&lt;/span> &lt;span class="nx">this&lt;/span> &lt;span class="nx">would&lt;/span> &lt;span class="nx">be&lt;/span> &lt;span class="nx">better&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">was&lt;/span> &lt;span class="nx">wrong&lt;/span>&lt;span class="p">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">compile&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">display&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">method&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">popwin&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="nx">display&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">buffer&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">display&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="nx">possible&lt;/span> &lt;span class="nx">in&lt;/span> &lt;span class="nx">popup&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">win&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">use&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="kn">package&lt;/span> &lt;span class="nx">cargo&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">server&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">analyzer&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="golang">
+&lt;a href="#golang">#&lt;/a>
+golang
+&lt;/h1>&lt;p>&lt;code>golang&lt;/code>作为谷歌的亲儿子，是拥有官方维护的语言服务器的。而且&lt;code>gopls&lt;/code>的使用体验非常好，完全不逊色与目前用户较多的&lt;code>goland&lt;/code>及&lt;code>vscode&lt;/code>。配合&lt;code>dlv-mode&lt;/code>使用，在调试上笔者认为能够更加的贴合&lt;code>unix&lt;/code>风格，也更加方便。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Go&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Set&lt;/span> &lt;span class="n">up&lt;/span> &lt;span class="n">before&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span> &lt;span class="n">hooks&lt;/span> &lt;span class="n">to&lt;/span> &lt;span class="n">format&lt;/span> &lt;span class="n">buffer&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">add&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">delete&lt;/span> &lt;span class="n">imports&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">go&lt;/span> &lt;span class="n">install&lt;/span> &lt;span class="n">github&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">com&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">golang&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">tools&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">cmd&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">gopls&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;(&lt;/span>&lt;span class="n">require&lt;/span> &lt;span class="s1">&amp;#39;lsp-mode)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">setq&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ui&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="n">nil&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hooks&lt;/span> &lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;before-save-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">buffer&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="n">t&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;before-save-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">organize&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">imports&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="n">t&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;go-mode-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hooks&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Start&lt;/span> &lt;span class="n">LSP&lt;/span> &lt;span class="n">Mode&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">YASnippet&lt;/span> &lt;span class="n">mode&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;go-mode-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">deferred&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;go-mode-hook #&amp;#39;&lt;/span>&lt;span class="n">yas&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">minor&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="python">
+&lt;a href="#python">#&lt;/a>
+python
+&lt;/h1>&lt;p>&lt;code>python&lt;/code>的语言服务器，笔者目前使用的是&lt;code>lsp-python-ms&lt;/code>进行配置的。这个插件解决了很多&lt;code>python lsp&lt;/code>的问题（实际上，在碰到这个插件之前，笔者一度要放弃安装&lt;code>python lsp&lt;/code>）。由于&lt;code>python&lt;/code>是解释型语言，对象的成员都较为灵活，一般编码阶段很难确认对象的成员及其确切的类型。所以在&lt;code>pylsp&lt;/code>使用过程中，往往会碰到无法有效提示的情况。满足一般提示需求吧。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;;; set env for python
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; copied from
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; https://gitee.com/nutora-emacs/lsp-python-ms
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; python lsp-server use python-lsp-server
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; install as: pip3 install python-lsp-server
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(ensure-package-installed &amp;#39;lsp-python-ms)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(require &amp;#39;lsp-python-ms)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(setq lsp-python-ms-auto-install-server t)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-hook &amp;#39;python-mode-hook #&amp;#39;lsp)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="cc">
+&lt;a href="#cc">#&lt;/a>
+c/c++
+&lt;/h1>&lt;p>实际上，笔者很喜欢&lt;code>c/c++&lt;/code>的语言服务器，简单、方便，安装时无比的顺畅。完全符合笔者对&lt;code>c&lt;/code>语言简单、强大、靠谱的印象。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;; set up lsp-mode for c/c++
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; brew install llvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; https://clangd.llvm.org/installation
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(unless (package-installed-p &amp;#39;eglot)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (w-install &amp;#39;eglot))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(require &amp;#39;eglot)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-to-list &amp;#39;eglot-server-programs &amp;#39;((c++-mode c-mode) &amp;#34;clangd&amp;#34;))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-hook &amp;#39;c-mode-hook &amp;#39;eglot-ensure)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-hook &amp;#39;c++-mode-hook &amp;#39;eglot-ensure)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="使用的一点备注">
+&lt;a href="#%e4%bd%bf%e7%94%a8%e7%9a%84%e4%b8%80%e7%82%b9%e5%a4%87%e6%b3%a8">#&lt;/a>
+使用的一点备注
+&lt;/h1>&lt;p>这里唠叨一点&lt;/p>
+&lt;h2 id="lsp-的管理单位是文件目录">
+&lt;a href="#lsp-%e7%9a%84%e7%ae%a1%e7%90%86%e5%8d%95%e4%bd%8d%e6%98%af%e6%96%87%e4%bb%b6%e7%9b%ae%e5%bd%95">#&lt;/a>
+lsp 的管理单位是文件目录
+&lt;/h2>&lt;p>这里对于&lt;code>golang&lt;/code>及&lt;code>rust&lt;/code>尤为明显。在使用&lt;code>emacs&lt;/code>打开一个关联了有效语言服务器的文件时，底部会提示为当前文件选择一个工作目录。尤其是，当路径&lt;code>A&lt;/code>已经设为工作目录时，再将&lt;code>A/B&lt;/code>设为工作目录，&lt;code>A/B&lt;/code>的打开状态是会出现异常的。所以尽量保持每个工作目录的独特。&lt;br>
+这里附上一些&lt;code>emacs lsp-mode&lt;/code>中笔者常用的函数：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">指令&lt;/th>
+&lt;th style="text-align: left">说明&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">&lt;code>lsp-workspace-folders-remove&lt;/code>&lt;/td>
+&lt;td style="text-align: left">将工作目录移除&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">&lt;code>lsp-workspace-folders-add&lt;/code>&lt;/td>
+&lt;td style="text-align: left">添加工作目录&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">&lt;code>lsp-workspace-restart&lt;/code>&lt;/td>
+&lt;td style="text-align: left">重启工作目录&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="其他备注">
+&lt;a href="#%e5%85%b6%e4%bb%96%e5%a4%87%e6%b3%a8">#&lt;/a>
+其他备注
+&lt;/h2>&lt;p>当安装了一个语言的&lt;code>lsp&lt;/code>服务及对应的&lt;code>emacs&lt;/code>客户端配置时，如果打开对应语言的文件发现&lt;code>lsp&lt;/code>没有生效，且打开&lt;code>toggle-debug-on-error&lt;/code>设置开启也没有发现任何报错，笔者建议重启&lt;code>emacs&lt;/code>。似乎&lt;code>emacs&lt;/code>热加载功能往往不会如人所愿。&lt;/p>
+&lt;h1 id="参考文献">
+&lt;a href="#%e5%8f%82%e8%80%83%e6%96%87%e7%8c%ae">#&lt;/a>
+参考文献
+&lt;/h1>&lt;p>&lt;a class="link" href="https://emacs-lsp.github.io/lsp-mode/" target="_blank" rel="noopener"
+>emacs lsp mode&lt;/a>&lt;br>
+及其他网络文献&lt;/p></description></item></channel></rss>

@@ -1,0 +1,525 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 虽然golang并不推荐使用goid来构建gls(goroutine local storage)，仍然有着很多的实现gls并使用的尝试。github-gls这里是一个常见的实现，基本表述了golang里gls的实现思路：获取goid，基于goid构建一个存储。本文中笔者尝试基于ebpf来构建一个golang的gls。\n# 基本功能 本文中基于ebpf实现的gls具有如下功能：\n基于goid的存储。即map[goid]=value； 基于goroutine派生关系设置的value缺省值。即map[goid=1]=121，且goid=1派生goid=2，则map[goid=2]=map[goid=1]=121；\n本文建议参照黑魔法-ebpf-对用户空间数据的写入进行理解。 "><title>基于ebpf实现的gls</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="基于ebpf实现的gls"><meta property='og:description' content=" 虽然golang并不推荐使用goid来构建gls(goroutine local storage)，仍然有着很多的实现gls并使用的尝试。github-gls这里是一个常见的实现，基本表述了golang里gls的实现思路：获取goid，基于goid构建一个存储。本文中笔者尝试基于ebpf来构建一个golang的gls。\n# 基本功能 本文中基于ebpf实现的gls具有如下功能：\n基于goid的存储。即map[goid]=value； 基于goroutine派生关系设置的value缺省值。即map[goid=1]=121，且goid=1派生goid=2，则map[goid=2]=map[goid=1]=121；\n本文建议参照黑魔法-ebpf-对用户空间数据的写入进行理解。 "><meta property='og:url' content='https://liyan-ah.github.io/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='code'><meta property='article:tag' content='bpf'><meta property='article:tag' content='golang'><meta property='article:tag' content='gls'><meta property='article:published_time' content='2022-11-25T01:14:00+00:00'><meta property='article:modified_time' content='2022-11-25T01:14:00+00:00'><meta name=twitter:title content="基于ebpf实现的gls"><meta name=twitter:description content=" 虽然golang并不推荐使用goid来构建gls(goroutine local storage)，仍然有着很多的实现gls并使用的尝试。github-gls这里是一个常见的实现，基本表述了golang里gls的实现思路：获取goid，基于goid构建一个存储。本文中笔者尝试基于ebpf来构建一个golang的gls。\n# 基本功能 本文中基于ebpf实现的gls具有如下功能：\n基于goid的存储。即map[goid]=value； 基于goroutine派生关系设置的value缺省值。即map[goid=1]=121，且goid=1派生goid=2，则map[goid=2]=map[goid=1]=121；\n本文建议参照黑魔法-ebpf-对用户空间数据的写入进行理解。 "><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/>基于ebpf实现的gls</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Nov 25, 2022</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 4 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>虽然<code>golang</code>并不推荐使用<code>goid</code>来构建<code>gls</code>(<code>goroutine local storage</code>)，仍然有着很多的实现<code>gls</code>并使用的尝试。<a class=link href=https://github.com/jtolio/gls target=_blank rel=noopener>github-gls</a>这里是一个常见的实现，基本表述了<code>golang</code>里<code>gls</code>的实现思路：获取<code>goid</code>，基于<code>goid</code>构建一个存储。本文中笔者尝试基于<code>ebpf</code>来构建一个<code>golang</code>的<code>gls</code>。</p></blockquote><h1 id=基本功能><a href=#%e5%9f%ba%e6%9c%ac%e5%8a%9f%e8%83%bd>#</a>
+基本功能</h1><p>本文中基于<code>ebpf</code>实现的<code>gls</code>具有如下功能：</p><ul><li>基于<code>goid</code>的存储。即<code>map[goid]=value</code>；</li><li>基于<code>goroutine</code>派生关系设置的<code>value</code>缺省值。即<code>map[goid=1]=121</code>，且<code>goid=1</code>派生<code>goid=2</code>，则<code>map[goid=2]=map[goid=1]=121</code>；<br>本文建议参照<a class=link href=https://liyan-ah.github.io/2022/11/04/%E9%BB%91%E9%AD%94%E6%B3%95-ebpf-%E5%AF%B9%E7%94%A8%E6%88%B7%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E7%9A%84%E5%86%99%E5%85%A5/#more target=_blank rel=noopener>黑魔法-ebpf-对用户空间数据的写入</a>进行理解。</li></ul><h1 id=用户态代码及效果><a href=#%e7%94%a8%e6%88%b7%e6%80%81%e4%bb%a3%e7%a0%81%e5%8f%8a%e6%95%88%e6%9e%9c>#</a>
+用户态代码及效果</h1><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span><span class=lnt>68
+</span><span class=lnt>69
+</span><span class=lnt>70
+</span><span class=lnt>71
+</span><span class=lnt>72
+</span><span class=lnt>73
+</span><span class=lnt>74
+</span><span class=lnt>75
+</span><span class=lnt>76
+</span><span class=lnt>77
+</span><span class=lnt>78
+</span><span class=lnt>79
+</span><span class=lnt>80
+</span><span class=lnt>81
+</span><span class=lnt>82
+</span><span class=lnt>83
+</span><span class=lnt>84
+</span><span class=lnt>85
+</span><span class=lnt>86
+</span><span class=lnt>87
+</span><span class=lnt>88
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=n>package</span> <span class=n>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;context&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;strconv&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;sync&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>var</span> <span class=n>Len</span> <span class=o>=</span> <span class=mi>5</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=err>当</span> <span class=n>info</span> <span class=err>为空时，使用父</span> <span class=n>goid</span> <span class=err>设置的值，否则存入</span> <span class=n>info</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>Go1</span><span class=p>(</span><span class=n>ctx</span> <span class=n>context</span><span class=o>.</span><span class=n>Context</span><span class=p>,</span> <span class=n>info</span> <span class=n>string</span><span class=p>,</span> <span class=n>wg</span> <span class=o>*</span><span class=n>sync</span><span class=o>.</span><span class=n>WaitGroup</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>defer</span> <span class=n>wg</span><span class=o>.</span><span class=n>Done</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>third</span> <span class=p>:</span><span class=o>=</span> <span class=n>Third</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>info</span> <span class=o>!=</span> <span class=s2>&#34;&#34;</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>third</span><span class=o>.</span><span class=n>Store</span><span class=p>(</span><span class=n>info</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=o>/*</span> <span class=err>诸多其他的逻辑</span> <span class=o>*/</span>
+</span></span><span class=line><span class=cl>    
+</span></span><span class=line><span class=cl>	<span class=n>info1</span> <span class=p>:</span><span class=o>=</span> <span class=n>third</span><span class=o>.</span><span class=n>Get</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>fmt</span><span class=o>.</span><span class=n>Printf</span><span class=p>(</span><span class=s2>&#34;raw info: [</span><span class=si>%s</span><span class=s2>], info get: [</span><span class=si>%s</span><span class=s2>]</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, info, info1)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span><span class=n>go</span><span class=p>:</span><span class=n>noinline</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>Set</span><span class=p>(</span><span class=n>info</span> <span class=p>[]</span><span class=n>byte</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>len</span><span class=p>(</span><span class=n>info</span><span class=p>)</span> <span class=o>&gt;</span> <span class=n>Len</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>info</span> <span class=o>=</span> <span class=n>info</span><span class=p>[:</span><span class=n>Len</span><span class=p>]</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>len</span><span class=p>(</span><span class=n>info</span><span class=p>)</span> <span class=o>&lt;</span> <span class=n>Len</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>tmp</span> <span class=p>:</span><span class=o>=</span> <span class=n>make</span><span class=p>([]</span><span class=n>byte</span><span class=p>,</span> <span class=n>Len</span><span class=o>-</span><span class=n>len</span><span class=p>(</span><span class=n>info</span><span class=p>))</span>
+</span></span><span class=line><span class=cl>		<span class=n>info</span> <span class=o>=</span> <span class=n>append</span><span class=p>(</span><span class=n>tmp</span><span class=p>,</span> <span class=n>info</span><span class=o>...</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>fmt</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;info: &#34;</span><span class=p>,</span> <span class=n>string</span><span class=p>(</span><span class=n>info</span><span class=p>))</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span><span class=n>go</span><span class=p>:</span><span class=n>noinline</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>Get</span><span class=p>(</span><span class=n>info</span> <span class=p>[]</span><span class=n>byte</span><span class=p>)</span> <span class=p>[]</span><span class=n>byte</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=o>//</span> <span class=n>alalalala</span><span class=p>,</span> <span class=n>magic</span> <span class=n>come</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span> <span class=n>info</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>Third</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>Info</span> <span class=n>string</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=p>(</span><span class=n>t</span> <span class=o>*</span><span class=n>Third</span><span class=p>)</span> <span class=n>Store</span><span class=p>(</span><span class=n>info</span> <span class=n>string</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>infoByt</span> <span class=p>:</span><span class=o>=</span> <span class=p>[]</span><span class=n>byte</span><span class=p>(</span><span class=n>info</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=o>//</span> <span class=err>这里假设是个约束</span>
+</span></span><span class=line><span class=cl>	<span class=n>infoByt</span> <span class=o>=</span> <span class=n>infoByt</span><span class=p>[:</span><span class=n>Len</span><span class=p>]</span>
+</span></span><span class=line><span class=cl>	<span class=n>Set</span><span class=p>(</span><span class=n>infoByt</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=p>(</span><span class=n>t</span> <span class=o>*</span><span class=n>Third</span><span class=p>)</span> <span class=n>Get</span><span class=p>()</span> <span class=n>string</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>infoByt</span> <span class=p>:</span><span class=o>=</span> <span class=n>make</span><span class=p>([]</span><span class=n>byte</span><span class=p>,</span> <span class=n>Len</span><span class=p>,</span> <span class=n>Len</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>infoByt</span> <span class=o>=</span> <span class=n>Get</span><span class=p>(</span><span class=n>infoByt</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span> <span class=n>string</span><span class=p>(</span><span class=n>infoByt</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>third1</span> <span class=p>:</span><span class=o>=</span> <span class=n>Third</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=n>info</span> <span class=p>:</span><span class=o>=</span> <span class=s2>&#34;12345&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=n>third1</span><span class=o>.</span><span class=n>Store</span><span class=p>(</span><span class=n>info</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>wg</span> <span class=p>:</span><span class=o>=</span> <span class=o>&amp;</span><span class=n>sync</span><span class=o>.</span><span class=n>WaitGroup</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=n>ctx</span> <span class=p>:</span><span class=o>=</span> <span class=n>context</span><span class=o>.</span><span class=n>Background</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>wg</span><span class=o>.</span><span class=n>Add</span><span class=p>(</span><span class=mi>1</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>go</span> <span class=n>Go1</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=s2>&#34;&#34;</span><span class=p>,</span> <span class=n>wg</span><span class=p>)</span> <span class=o>//</span> <span class=err>写入空数据，预期使用父</span> <span class=n>goid</span> <span class=err>数据，即</span> <span class=mi>12345</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=n>i</span> <span class=p>:</span><span class=o>=</span> <span class=mi>1125</span><span class=p>;</span> <span class=n>i</span> <span class=o>&lt;</span> <span class=mi>1130</span><span class=p>;</span> <span class=n>i</span><span class=o>++</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>wg</span><span class=o>.</span><span class=n>Add</span><span class=p>(</span><span class=mi>1</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=n>v</span> <span class=p>:</span><span class=o>=</span> <span class=n>strconv</span><span class=o>.</span><span class=n>Itoa</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=n>i</span><span class=o>%</span><span class=mi>10</span> <span class=o>==</span> <span class=mi>0</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=n>v</span> <span class=o>=</span> <span class=s2>&#34;&#34;</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=n>go</span> <span class=n>Go1</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=n>v</span><span class=p>,</span> <span class=n>wg</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>wg</span><span class=o>.</span><span class=n>Wait</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=o>/*</span> <span class=n>very</span> <span class=n>long</span> <span class=n>handle</span> <span class=n>logic</span><span class=o>*/</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=n>third2</span> <span class=p>:</span><span class=o>=</span> <span class=n>Third</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=n>infoGet</span> <span class=p>:</span><span class=o>=</span> <span class=n>third2</span><span class=o>.</span><span class=n>Get</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>fmt</span><span class=o>.</span><span class=n>Printf</span><span class=p>(</span><span class=s2>&#34;in main, getInfo, [</span><span class=si>%s</span><span class=s2>]</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, infoGet)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>执行结果为：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// 未开启 bpf 
+</span></span><span class=line><span class=cl>info:  12345
+</span></span><span class=line><span class=cl>info:  1129
+</span></span><span class=line><span class=cl>raw info: [1129], info get: []
+</span></span><span class=line><span class=cl>info:  1126
+</span></span><span class=line><span class=cl>raw info: [1126], info get: []
+</span></span><span class=line><span class=cl>info:  1128
+</span></span><span class=line><span class=cl>raw info: [1128], info get: []
+</span></span><span class=line><span class=cl>raw info: [], info get: []
+</span></span><span class=line><span class=cl>info:  1125
+</span></span><span class=line><span class=cl>info:  1127
+</span></span><span class=line><span class=cl>raw info: [1125], info get: []
+</span></span><span class=line><span class=cl>raw info: [1127], info get: []
+</span></span><span class=line><span class=cl>in main, getInfo, []
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>// 开启 bpf
+</span></span><span class=line><span class=cl>info:  12345
+</span></span><span class=line><span class=cl>info:  1129
+</span></span><span class=line><span class=cl>raw info: [], info get: [12345]  // 传入空值，使用父 goid 存入数据
+</span></span><span class=line><span class=cl>raw info: [1129], info get: [1129]
+</span></span><span class=line><span class=cl>info:  1126
+</span></span><span class=line><span class=cl>raw info: [1126], info get: [1126]
+</span></span><span class=line><span class=cl>info:  1127
+</span></span><span class=line><span class=cl>raw info: [1127], info get: [1127]
+</span></span><span class=line><span class=cl>info:  1125
+</span></span><span class=line><span class=cl>raw info: [1125], info get: [1125]
+</span></span><span class=line><span class=cl>info:  1128
+</span></span><span class=line><span class=cl>raw info: [1128], info get: [1128]
+</span></span><span class=line><span class=cl>in main, getInfo, [12345]
+</span></span></code></pre></td></tr></table></div></div><p>上述示例对比了开启<code>bpf</code>前后的用户态代码输出。可以看到，当子<code>goroutine</code>缺少某个信息时，可以获取父<code>goroutine</code>的数据作为缺省值。</p><h1 id=应用><a href=#%e5%ba%94%e7%94%a8>#</a>
+应用</h1><p>意味着我们可以在父<code>goroutine</code>中存入我们需要的数据，而后无论是否创建新的<code>goroutine</code>，均能获取该信息。维护了<code>goroutine session</code>的数据。</p><h1 id=ebpf-逻辑><a href=#ebpf-%e9%80%bb%e8%be%91>#</a>
+ebpf 逻辑</h1><p>这里仍然附上了<code>ebpf</code>的主要逻辑以便说明实现过程。除了之前文章中涉及的<code>ebpf</code>向用户态写入数据，本文使用了<code>golang</code>创建<code>goroutine</code>相关的<code>uprobe</code>来维护<code>goroutine session</code>状态。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span><span class=lnt>105
+</span><span class=lnt>106
+</span><span class=lnt>107
+</span><span class=lnt>108
+</span><span class=lnt>109
+</span><span class=lnt>110
+</span><span class=lnt>111
+</span><span class=lnt>112
+</span><span class=lnt>113
+</span><span class=lnt>114
+</span><span class=lnt>115
+</span><span class=lnt>116
+</span><span class=lnt>117
+</span><span class=lnt>118
+</span><span class=lnt>119
+</span><span class=lnt>120
+</span><span class=lnt>121
+</span><span class=lnt>122
+</span><span class=lnt>123
+</span><span class=lnt>124
+</span><span class=lnt>125
+</span><span class=lnt>126
+</span><span class=lnt>127
+</span><span class=lnt>128
+</span><span class=lnt>129
+</span><span class=lnt>130
+</span><span class=lnt>131
+</span><span class=lnt>132
+</span><span class=lnt>133
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>type</span><span class=p>,</span> <span class=n>BPF_MAP_TYPE_LRU_HASH</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>key_size</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>u64</span><span class=p>));</span>   <span class=o>//</span> <span class=n>pid_tgid</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>value_size</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>u64</span><span class=p>));</span> <span class=o>//</span> <span class=n>parent</span> <span class=n>goid</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>max_entries</span><span class=p>,</span> <span class=n>MAX_ENTRIES</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span> <span class=n>go_goid_map</span> <span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;.maps&#34;</span><span class=p>);</span>  <span class=o>//</span> <span class=err>用来获取</span> <span class=n>goid</span> <span class=err>状态</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>type</span><span class=p>,</span> <span class=n>BPF_MAP_TYPE_HASH</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>key_size</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>u64</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>value_size</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>u8</span><span class=p>)</span> <span class=o>*</span> <span class=mi>5</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>max_entries</span><span class=p>,</span> <span class=mi>100</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span> <span class=n>info_map</span> <span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;.maps&#34;</span><span class=p>);</span>  <span class=o>//</span> <span class=err>用来存储</span> <span class=n>goid</span><span class=o>-&gt;</span><span class=n>info</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>type</span><span class=p>,</span> <span class=n>BPF_MAP_TYPE_PERF_EVENT_ARRAY</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span> <span class=n>events</span> <span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;.maps&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>static</span> <span class=n>__always_inline</span> <span class=n>u64</span> <span class=n>get_goid</span><span class=p>(</span><span class=n>u32</span> <span class=n>tgid</span><span class=p>,</span> <span class=n>u32</span> <span class=n>pid</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>unsigned</span> <span class=n>long</span> <span class=n>task_addr</span> <span class=o>=</span> <span class=p>(</span><span class=n>unsigned</span> <span class=n>long</span><span class=p>)</span><span class=n>bpf_get_current_task</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>unsigned</span> <span class=n>long</span> <span class=n>fsbase</span>    <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>unsigned</span> <span class=n>long</span> <span class=n>g</span>         <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>           <span class=n>goid</span>      <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=err>直接基于</span> <span class=err>偏移量进行处理了</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>task_struct</span><span class=p>,</span> <span class=n>thread</span><span class=p>)</span> <span class=o>=</span> <span class=mi>4992</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>thread_struct</span><span class=p>,</span> <span class=n>fsbase</span><span class=p>)</span> <span class=o>=</span> <span class=mi>40</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>fsbase</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>fsbase</span><span class=p>),</span>
+</span></span><span class=line><span class=cl>                 <span class=p>(</span><span class=n>void</span> <span class=o>*</span><span class=p>)(</span><span class=n>task_addr</span> <span class=o>+</span> <span class=n>OFF_TASK_THRD</span> <span class=o>+</span> <span class=n>OFF_THRD_FSBASE</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>g</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>g</span><span class=p>),</span> <span class=p>(</span><span class=n>void</span> <span class=o>*</span><span class=p>)(</span><span class=n>fsbase</span> <span class=o>-</span> <span class=mi>8</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>goid</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>goid</span><span class=p>),</span> <span class=p>(</span><span class=n>void</span> <span class=o>*</span><span class=p>)(</span><span class=n>g</span> <span class=o>+</span> <span class=n>GOID_OFFSET</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=n>goid</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;uprobe/main_set&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=ne>int</span> <span class=n>uprobe__main_set</span><span class=p>(</span><span class=n>struct</span> <span class=n>pt_regs</span> <span class=o>*</span><span class=n>ctx</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>uintptr_t</span> <span class=n>info_p</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u8</span>        <span class=n>info</span><span class=p>[</span><span class=mi>5</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>pid_tgid</span> <span class=o>=</span> <span class=n>bpf_get_current_pid_tgid</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span>       <span class=n>pid</span>      <span class=o>=</span> <span class=p>(</span><span class=n>u32</span><span class=p>)(</span><span class=n>pid_tgid</span> <span class=o>&amp;</span> <span class=mh>0x00FF</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span>       <span class=n>tgid</span>     <span class=o>=</span> <span class=p>(</span><span class=n>u32</span><span class=p>)(</span><span class=n>pid_tgid</span> <span class=o>&gt;&gt;</span> <span class=mi>32</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>goid</span>     <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>goid</span> <span class=o>=</span> <span class=n>get_goid</span><span class=p>(</span><span class=n>tgid</span><span class=p>,</span> <span class=n>pid</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>SARG</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>info_p</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>info</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>info</span><span class=p>),</span> <span class=p>(</span><span class=k>const</span> <span class=n>void</span> <span class=o>*</span><span class=p>)</span><span class=n>info_p</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_map_update_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>info_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>goid</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>info</span><span class=p>,</span> <span class=n>BPF_ANY</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>event_t</span> <span class=n>event</span>  <span class=o>=</span> <span class=p>{};</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>pid_tgid</span> <span class=o>=</span> <span class=n>pid_tgid</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>memcpy</span><span class=p>(</span><span class=n>event</span><span class=o>.</span><span class=n>info</span><span class=p>,</span> <span class=n>info</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>info</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_perf_event_output</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>events</span><span class=p>,</span> <span class=n>BPF_F_CURRENT_CPU</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>event</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>event</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;uprobe/main_get&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=ne>int</span> <span class=n>uprobe__main_get</span><span class=p>(</span><span class=n>struct</span> <span class=n>pt_regs</span> <span class=o>*</span><span class=n>ctx</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>uintptr_t</span> <span class=n>info_p</span>   <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>pid_tgid</span> <span class=o>=</span> <span class=n>bpf_get_current_pid_tgid</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span>       <span class=n>pid</span>      <span class=o>=</span> <span class=p>(</span><span class=n>u32</span><span class=p>)(</span><span class=n>pid_tgid</span> <span class=o>&amp;</span> <span class=mh>0x00FF</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span>       <span class=n>tgid</span>     <span class=o>=</span> <span class=p>(</span><span class=n>u32</span><span class=p>)(</span><span class=n>pid_tgid</span> <span class=o>&gt;&gt;</span> <span class=mi>32</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>goid</span>     <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>goid</span> <span class=o>=</span> <span class=n>get_goid</span><span class=p>(</span><span class=n>tgid</span><span class=p>,</span> <span class=n>pid</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>void</span> <span class=o>*</span><span class=n>r_info_p</span> <span class=o>=</span> <span class=n>NULL</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>r_info_p</span>       <span class=o>=</span> <span class=n>bpf_map_lookup_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>info_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>goid</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>r_info_p</span> <span class=o>==</span> <span class=n>NULL</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=n>event_t</span> <span class=n>event</span>  <span class=o>=</span> <span class=p>{};</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>pid_tgid</span> <span class=o>=</span> <span class=n>pid_tgid</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>SARG</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>info_p</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>u8</span> <span class=n>info</span><span class=p>[</span><span class=mi>5</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=n>memcpy</span><span class=p>(</span><span class=n>info</span><span class=p>,</span> <span class=n>r_info_p</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>info</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>memcpy</span><span class=p>(</span><span class=n>event</span><span class=o>.</span><span class=n>info</span><span class=p>,</span> <span class=n>info</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>event</span><span class=o>.</span><span class=n>info</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>res</span>  <span class=o>=</span> <span class=n>bpf_probe_write_user</span><span class=p>((</span><span class=n>u8</span> <span class=o>*</span><span class=p>)</span><span class=n>info_p</span><span class=p>,</span> <span class=n>info</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>info</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>addr</span> <span class=o>=</span> <span class=n>info_p</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_perf_event_output</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>events</span><span class=p>,</span> <span class=n>BPF_F_CURRENT_CPU</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>event</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>event</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>/*</span> <span class=n>golang_runtime_newproc1</span>
+</span></span><span class=line><span class=cl>   <span class=k>func</span> <span class=n>newproc1</span><span class=p>(</span><span class=n>fn</span> <span class=o>*</span><span class=n>funcval</span><span class=p>,</span> <span class=n>argp</span> <span class=n>unsafe</span><span class=o>.</span><span class=n>Pointer</span><span class=p>,</span> <span class=n>narg</span> <span class=n>int32</span><span class=p>,</span> <span class=n>callergp</span> <span class=o>*</span><span class=n>g</span><span class=p>,</span>
+</span></span><span class=line><span class=cl> <span class=n>callerpc</span> <span class=n>uintptr</span><span class=p>)</span> <span class=o>*</span><span class=n>g</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl><span class=o>*/</span>
+</span></span><span class=line><span class=cl><span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;uprobe/golang_runtime_newproc1&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=ne>int</span> <span class=n>uprobe__golang_runtime_newproc1</span><span class=p>(</span><span class=n>struct</span> <span class=n>pt_regs</span> <span class=o>*</span><span class=n>ctx</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>pid_tgid</span> <span class=o>=</span> <span class=n>bpf_get_current_pid_tgid</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>uintptr_t</span> <span class=n>g_addr</span>   <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>cur_goid</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>SARG</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=n>g_addr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>cur_goid</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>cur_goid</span><span class=p>),</span> <span class=p>(</span><span class=n>void</span> <span class=o>*</span><span class=p>)(</span><span class=n>g_addr</span> <span class=o>+</span> <span class=n>GOID_OFFSET</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_map_update_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>go_goid_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>pid_tgid</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>cur_goid</span><span class=p>,</span> <span class=n>BPF_ANY</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;uprobe/golang_runtime_runqput&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=ne>int</span> <span class=n>uprobe__golang_runtime_runqput</span><span class=p>(</span><span class=n>struct</span> <span class=n>pt_regs</span> <span class=o>*</span><span class=n>ctx</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>pid_tgid</span>    <span class=o>=</span> <span class=n>bpf_get_current_pid_tgid</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>uintptr_t</span> <span class=n>g_addr</span>      <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>      <span class=o>*</span><span class=n>parent_goid</span> <span class=o>=</span> <span class=n>NULL</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>       <span class=n>child_goid</span>  <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>void</span>     <span class=o>*</span><span class=n>v_p</span>         <span class=o>=</span> <span class=n>NULL</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>parent_goid</span> <span class=o>=</span> <span class=n>bpf_map_lookup_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>go_goid_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>pid_tgid</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>parent_goid</span> <span class=o>==</span> <span class=n>NULL</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=mf>1.</span> <span class=err>获取新</span> <span class=n>goroutine</span> <span class=err>的</span> <span class=n>goid</span>
+</span></span><span class=line><span class=cl>  <span class=n>SARG</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>g_addr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>child_goid</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>child_goid</span><span class=p>),</span>
+</span></span><span class=line><span class=cl>                 <span class=p>(</span><span class=n>void</span> <span class=o>*</span><span class=p>)(</span><span class=n>g_addr</span> <span class=o>+</span> <span class=n>GOID_OFFSET</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=mf>2.</span> <span class=err>设置新</span> <span class=n>goid</span> <span class=err>绑定的</span> <span class=n>caller</span> <span class=err>信息</span>
+</span></span><span class=line><span class=cl>  <span class=n>v_p</span> <span class=o>=</span> <span class=n>bpf_map_lookup_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>info_map</span><span class=p>,</span> <span class=n>parent_goid</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>v_p</span> <span class=o>==</span> <span class=n>NULL</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=err>设置子</span> <span class=n>goid</span> <span class=err>绑定</span> <span class=n>caller</span> <span class=err>为</span> <span class=err>父</span> <span class=n>goid</span> <span class=err>信息</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_map_update_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>info_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>child_goid</span><span class=p>,</span> <span class=n>v_p</span><span class=p>,</span> <span class=n>BPF_ANY</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_map_delete_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>go_goid_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>pid_tgid</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>以上。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/code/>Code</a>
+<a href=/tags/bpf/>Bpf</a>
+<a href=/tags/golang/>Golang</a>
+<a href=/tags/gls/>Gls</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/><div class=article-details><h2 class=article-title>如何追踪golang channel?</h2></div></a></article><article><a href=/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/><div class=article-details><h2 class=article-title>BPF追踪Go程序的挑战</h2></div></a></article><article><a href=/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/><div class=article-details><h2 class=article-title>golang常见类型作为参数的eBPF解析</h2></div></a></article><article><a href=/p/%E9%BB%91%E9%AD%94%E6%B3%95--%E7%94%A8-ebpf-%E6%9E%84%E5%BB%BA%E7%94%A8%E6%88%B7%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E7%9A%84%E6%A1%A5%E6%A2%81/><div class=article-details><h2 class=article-title>黑魔法--用 ebpf 构建用户空间数据的桥梁</h2></div></a></article><article><a href=/p/bpf-lru_hash_map-%E5%8F%8A-hash_map-%E7%9A%84%E4%BD%BF%E7%94%A8%E5%BC%82%E5%B8%B8/><div class=article-details><h2 class=article-title>BPF LRU_HASH_MAP 及 HASH_MAP 的使用异常</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

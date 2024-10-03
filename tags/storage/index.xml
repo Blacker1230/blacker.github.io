@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Storage on 李岩</title><link>https://liyan-ah.github.io/tags/storage/</link><description>Recent content in Storage on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Wed, 02 Oct 2024 14:11:34 +0800</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/storage/index.xml" rel="self" type="application/rss+xml"/><item><title>存储概述</title><link>https://liyan-ah.github.io/p/%E5%AD%98%E5%82%A8%E6%A6%82%E8%BF%B0/</link><pubDate>Wed, 02 Oct 2024 14:11:34 +0800</pubDate><guid>https://liyan-ah.github.io/p/%E5%AD%98%E5%82%A8%E6%A6%82%E8%BF%B0/</guid><description>&lt;blockquote>
+&lt;p>最近工作中一直接触存储相关的内容，感觉对现在的存储分类及各个存储的优缺点等了解的还很少。趁着这个机会整理下相关的内容。相信会有收获。&lt;/p>
+&lt;/blockquote>
+&lt;h2 id="简介">
+&lt;a href="#%e7%ae%80%e4%bb%8b">#&lt;/a>
+简介
+&lt;/h2>&lt;p>存储是系统设计中不可缺少的一部分，而存储的选择又有很多种，相关的概念也很繁杂：关系型数据库、列数据库、文件型数据库等等。在为系统选择合适的数据库之前，显然需要了解这些数据库的概念及它们的优缺点。这些是笔者还不具备的能力。笔者试着在本文中对这些概念进行总结，并结合实践来论述下使用需要注意的内容。本文主要内容均整理自互联网文档。希望是个引子，后面依据实践，持续补充及修正涉及到的内容。&lt;/p>
+&lt;p>从工作中的经验来看，笔者对存储系统一般关注系统的存储方式、数据一致性的保障方式、如何进行扩展。部分已确定的内容罗列在下面：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">系统&lt;/th>
+&lt;th style="text-align: left">存储类型&lt;/th>
+&lt;th style="text-align: left">存储方式&lt;/th>
+&lt;th style="text-align: left">CAP满足&lt;/th>
+&lt;th style="text-align: left">扩展方式&lt;/th>
+&lt;th style="text-align: left">常见优化&lt;/th>
+&lt;th style="text-align: left">价格&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">MySQL&lt;/td>
+&lt;td style="text-align: left">关系型数据库&lt;/td>
+&lt;td style="text-align: left">B+树 (InnoDB引擎)&lt;/td>
+&lt;td style="text-align: left">CA（同步复制），AP（异步复制、半同步复制）&lt;/td>
+&lt;td style="text-align: left">一般采用主从同步的方式。通过消费binlog, redolog, undolog 来实现数据间的一致性。&lt;/td>
+&lt;td style="text-align: left">加机器（CPU、内存、SSD盘）、集群同步方式修改（异步同步）、读写分离、分库分表&lt;/td>
+&lt;td style="text-align: left">均衡&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">Elasticsearch&lt;/td>
+&lt;td style="text-align: left">检索系统&lt;/td>
+&lt;td style="text-align: left">索引+JSON为基础的文档&lt;/td>
+&lt;td style="text-align: left">CA（设置同步配置），AP&lt;/td>
+&lt;td style="text-align: left">扩展 shard 来实现水平扩展&lt;/td>
+&lt;td style="text-align: left">增加 Shard，索引优化，加机器&lt;/td>
+&lt;td style="text-align: left">涉及到倒排索引的构建，较为耗费 CPU&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="mysql">
+&lt;a href="#mysql">#&lt;/a>
+MySQL
+&lt;/h2>&lt;p>本节期望能够回答以下问题：&lt;/p>
+&lt;ul>
+&lt;li>MySQL 是否一定是 B+ 树的存储结构。&lt;/li>
+&lt;li>InnoDB 为何选择 B+ 树数据结构。&lt;/li>
+&lt;li>一个 InnoDB 实例支持多少条数据记录。&lt;/li>
+&lt;li>InnoDB 中索引（含主键）都存储在哪里。&lt;/li>
+&lt;/ul>
+&lt;h3 id="21-简述">
+&lt;a href="#21-%e7%ae%80%e8%bf%b0">#&lt;/a>
+2.1 简述
+&lt;/h3>&lt;p>MySQL 是最经典的存储系统了，作为关系型数据库中当之无愧的主流，很难找出一个后端的系统（非某个单独的服务）在运行时可以完全不使用 MySQL（笔者工作的这些年还没有遇到过）。通常认为 MySQL 是行数据库，这通常是指 InnoDB 存储引擎是行数据库。需要注意的是，MySQL 同样是有列数据库引擎&lt;sup id="fnref:1">&lt;a href="#fn:1" class="footnote-ref" role="doc-noteref">1&lt;/a>&lt;/sup>。&lt;/p>
+&lt;h3 id="22-innodb">
+&lt;a href="#22-innodb">#&lt;/a>
+2.2 InnoDB
+&lt;/h3>&lt;p>MySQL 支持诸多的存储引擎，一般会使用 InnoDB&lt;sup id="fnref:2">&lt;a href="#fn:2" class="footnote-ref" role="doc-noteref">2&lt;/a>&lt;/sup>（当然也支持 MyISAM，CSV，内存等方式的存储引擎）。本文中对 MySQL 的介绍也默认以 InnoDB 作为存储引擎。从分类上来看，MySQL 是典型的关系型数据库了：它的所有数据检索、查询等操作都是以关系组织操作为核心的。在此基础上有诸如外键、多表联查等操作。关系型数据库也是比较贴合实际的各种数据关系并且易于理解的，很多数据库课程中往往会通过构建一个图书管理系统的方式来学习 MySQL，这里书籍种类标签、各种借阅的关系描述也是关系型数据库所擅长的。&lt;/p>
+&lt;p>InnoDB 引擎默认使用 B+ 树来存储数据&lt;sup id="fnref:3">&lt;a href="#fn:3" class="footnote-ref" role="doc-noteref">3&lt;/a>&lt;/sup>：将索引存储在内存中而将实际的数据存储在磁盘中，而且由于 B+ 树的特点，使得任意记录所在的页均可通过有限次的检索动作来定位到，并加载到内存中做进一步的检索。这一点较好的兼容了数据的查询性能及数据的存储容量。实际的记录会存放在数据页中（一般在磁盘中）。而索引页一般会在 MySQL 进程启动后加载到内存中。值的注意的是，MySQL 实例启动后，可以支持多种通信方式：TCP 连接、管道｜共享内存（需要指定参数）、UNIX 套接字等。&lt;/p>
+&lt;p>InnoDB 引擎中，明确声明为主键的字段（或者在没有明确生命为主键的情况下，第一个被声明为索引的字段）会存储在聚集索引表中（B+树）。而非主键的索引则存储在辅助索引表中（同样为 B+ 树）。不同的是，与聚集索引表中会存储数据页的地址不同，辅助索引表中存储的是目标数据的聚集索引信息，即主键信息。当使用非主键索引查询数据时，需要先从辅助索引表中检索出主键的值，再到聚集索引中检索出实际数据页的内容并加载到内存中。在硬盘足够大的情况下，B+ 树中索引的设计决定了单个 InnoDB 实例能够存储多少数据&lt;sup id="fnref:4">&lt;a href="#fn:4" class="footnote-ref" role="doc-noteref">4&lt;/a>&lt;/sup>。需要注意的是， B+ 树并不是二叉树，父节点可能会有很多子节点。限制内存非叶节点中能够存储索引条数的因素包括索引字段的大小、InnoDB 自身的叶结构等。从理论上看，单个 InnoDB 实例能存储多少数据取决于单个 B+ 树能存储多少数据。&lt;/p>
+&lt;h3 id="23-待确认">
+&lt;a href="#23-%e5%be%85%e7%a1%ae%e8%ae%a4">#&lt;/a>
+2.3 待确认
+&lt;/h3>&lt;ul>
+&lt;li>一条记录的写入、同步、查询的过程。&lt;/li>
+&lt;/ul>
+&lt;h2 id="elasticsearch">
+&lt;a href="#elasticsearch">#&lt;/a>
+Elasticsearch
+&lt;/h2>&lt;p>本节期望能够回答以下问题：&lt;/p>
+&lt;ul>
+&lt;li>ES 的数据存储方式。&lt;/li>
+&lt;li>ES 的数据同步方式。&lt;/li>
+&lt;li>ES 的数据存储、查询过程。&lt;/li>
+&lt;/ul>
+&lt;h3 id="31-简述">
+&lt;a href="#31-%e7%ae%80%e8%bf%b0">#&lt;/a>
+3.1 简述
+&lt;/h3>&lt;p>Elasticsearch，ES，也是经典的存储了，其本身基于 Lucene 进行构建。ES 强大的全文索引能力使得其经常运用在很多检索的场景中，比如视频网站或者简单的文档检索就可以直接使用 ES，从这一点看，预期说 ES 是存储系统，不如说 ES 是检索系统。因为其强大的检索能力，以 ES 为基础的 ELK 生态系统也是日志存储中可以开箱即用的解决方案。&lt;/p>
+&lt;h3 id="32-系统组成">
+&lt;a href="#32-%e7%b3%bb%e7%bb%9f%e7%bb%84%e6%88%90">#&lt;/a>
+3.2 系统组成
+&lt;/h3>&lt;p>ES 对外通过 index 提供查询能力，index 又可以通过设置 shard 数目来达到横向扩展的能力。当一个 ES 集群的读写压力很大时，可以通过调大 shard 数来使得单个 shard 的读写压力更小。当然，如果每个 node 节点启动了很多的 shard，比如已经到了机器的性能极限，此时即使扩充 shard，物理机的限制也会使得 ES 的查询效果有优化效果。除了横向扩展，ES 还通过 Replicas 备份的方式来实现容灾备份的效果。当 index 中的某个 shard 出现异常时，可以切换到备份的分片中&lt;sup id="fnref:5">&lt;a href="#fn:5" class="footnote-ref" role="doc-noteref">5&lt;/a>&lt;/sup>。值的注意的是，index 中包含了正倒排的索引，而基础数据仍然是基于 JSON 的展示结构&lt;sup id="fnref:6">&lt;a href="#fn:6" class="footnote-ref" role="doc-noteref">6&lt;/a>&lt;/sup>。&lt;/p>
+&lt;h3 id="33-数据处理过程">
+&lt;a href="#33-%e6%95%b0%e6%8d%ae%e5%a4%84%e7%90%86%e8%bf%87%e7%a8%8b">#&lt;/a>
+3.3 数据处理过程
+&lt;/h3>&lt;p>数据的写入动作会由 Coordinate Node 来处理，该 Node 可能是集群中的任一 Node。而后会依据文档 ID 来路由到对应的 shard 组（包含其备份）中的一个 node1 上。node1 在处理完成本节点的操作后，会将请求并行发送到其他副本中，在确认其他副本写入完成后，会将写成功的结果发送回去（可以通过参数控制，满足了 C）&lt;sup id="fnref:7">&lt;a href="#fn:7" class="footnote-ref" role="doc-noteref">7&lt;/a>&lt;/sup>。&lt;/p>
+&lt;p>数据在检索时，同样会将请求发送到 Coordinating Node，并在该 Node 上进行分词等操作。而后将分词结果发送到所有的 shard 上去检索 doc 的排序字段。排序字段检索结果依旧会汇聚到该 Node 上，排序后找到所需要的 doc id 并到该 doc 的 shard 上取获取实际的 doc，返回给 Client&lt;sup id="fnref:8">&lt;a href="#fn:8" class="footnote-ref" role="doc-noteref">8&lt;/a>&lt;/sup>。&lt;/p>
+&lt;h3 id="34-待确认">
+&lt;a href="#34-%e5%be%85%e7%a1%ae%e8%ae%a4">#&lt;/a>
+3.4 待确认
+&lt;/h3>&lt;ul>
+&lt;li>完整的架构图。&lt;/li>
+&lt;li>完整的数据处理流程。&lt;/li>
+&lt;/ul>
+&lt;h2 id="clickhouse">
+&lt;a href="#clickhouse">#&lt;/a>
+ClickHouse
+&lt;/h2>&lt;p>本节期望能够回答以下问题：&lt;/p>
+&lt;ul>
+&lt;li>CK 的数据存储方式，横向扩展方式。&lt;/li>
+&lt;li>CK 的数据同步方式。&lt;/li>
+&lt;li>CK 的数据存储、查询过程。&lt;/li>
+&lt;/ul>
+&lt;h3 id="41-简述">
+&lt;a href="#41-%e7%ae%80%e8%bf%b0">#&lt;/a>
+4.1 简述
+&lt;/h3>&lt;p>ClickHouse 是近几年比较火的列式存储数据库。其与行式存储的区别可以认为是：列式存储是以列为单位的存储。当一行中往往仅需要读取少数几个列的情况下，列存储能够获得更好的读取效果。而且，由于每列的数据往往是相同的类型，按照列进行存储可以更方便的进行压缩。这样的特性使得列存储在 OLAP 的场景下可以获得更好的检索效果及更好的资源利用率&lt;sup id="fnref:9">&lt;a href="#fn:9" class="footnote-ref" role="doc-noteref">9&lt;/a>&lt;/sup>。&lt;/p>
+&lt;h3 id="42-系统组成">
+&lt;a href="#42-%e7%b3%bb%e7%bb%9f%e7%bb%84%e6%88%90">#&lt;/a>
+4.2 系统组成
+&lt;/h3>&lt;p>CK 同样有诸多的表引擎，使用比较广泛的是 MergeTree。一般来说，每个 Table 可以按照多个 Partition 来进行划分。&lt;/p>
+&lt;p>集群部署时，一般使用 ZooKeeper 来维护集群的关系，启动多个节点并按照节点的角色划分来实现主备及横向扩展。&lt;/p>
+&lt;h3 id="43-待确认">
+&lt;a href="#43-%e5%be%85%e7%a1%ae%e8%ae%a4">#&lt;/a>
+4.3 待确认
+&lt;/h3>&lt;ul>
+&lt;li>CK 数据同步方式。&lt;/li>
+&lt;li>CK 数据处理过程。&lt;/li>
+&lt;/ul>
+&lt;h2 id="后记">
+&lt;a href="#%e5%90%8e%e8%ae%b0">#&lt;/a>
+后记
+&lt;/h2>&lt;p>存储是一个很广大的领域。仅本文中设计到的 MySQL、ES、CK 这三种典型的存储系统就消耗了笔者两天的时间来准备文档，而且涉及的内容还很浅。而本文中未涉及到的 Druid、HDFS、Redis、RocksDB、Cassandra 等涉及的存储内容更多。感觉笔者一时怕是无法有效的整理完成。本次且这样吧。&lt;/p>
+&lt;p>在本次整理的过程中，笔者同样感觉到资料的缺失：MySQL 的文档及图书资料较为丰富，到后面的 ES、CK 等就开始缺少内容了。希望笔者能够贡献若干篇有深度的文章。&lt;/p>
+&lt;div class="footnotes" role="doc-endnotes">
+&lt;hr>
+&lt;ol>
+&lt;li id="fn:1">
+&lt;p>&lt;a class="link" href="https://www.cnblogs.com/dhName/p/14233938.html" target="_blank" rel="noopener"
+>https://www.cnblogs.com/dhName/p/14233938.html&lt;/a>。mysql 的存储引擎和 infobright 引擎说明。&amp;#160;&lt;a href="#fnref:1" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:2">
+&lt;p>&lt;a class="link" href="https://dev.mysql.com/doc/refman/8.4/en/innodb-introduction.html" target="_blank" rel="noopener"
+>https://dev.mysql.com/doc/refman/8.4/en/innodb-introduction.html&lt;/a>。InnoDB introduction。&amp;#160;&lt;a href="#fnref:2" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:3">
+&lt;p>&lt;a class="link" href="https://medium.com/@relieved_gold_mole_613/why-does-mysql-use-b-trees-7807ed3090bc" target="_blank" rel="noopener"
+>https://medium.com/@relieved_gold_mole_613/why-does-mysql-use-b-trees-7807ed3090bc&lt;/a>。 why does mysql use b+ tree。&amp;#160;&lt;a href="#fnref:3" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:4">
+&lt;p>&lt;a class="link" href="https://cloud.tencent.com/developer/article/2123136" target="_blank" rel="noopener"
+>https://cloud.tencent.com/developer/article/2123136&lt;/a>。单表最大 2000 万行数据。&amp;#160;&lt;a href="#fnref:4" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:5">
+&lt;p>&lt;a class="link" href="https://zhuanlan.zhihu.com/p/32990496" target="_blank" rel="noopener"
+>https://zhuanlan.zhihu.com/p/32990496&lt;/a>。从 Elasticsearch 来看分布式架构系统设计。&amp;#160;&lt;a href="#fnref:5" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:6">
+&lt;p>&lt;a class="link" href="https://www.knowi.com/blog/what-is-elastic-search/" target="_blank" rel="noopener"
+>https://www.knowi.com/blog/what-is-elastic-search/&lt;/a>。what is elastic search。&amp;#160;&lt;a href="#fnref:6" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:7">
+&lt;p>&lt;a class="link" href="https://www.cnblogs.com/jimoer/p/15573952.html" target="_blank" rel="noopener"
+>https://www.cnblogs.com/jimoer/p/15573952.html&lt;/a>。ES 写入数据的过程是怎样的？以及是如何快速更新索引数据的？&amp;#160;&lt;a href="#fnref:7" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:8">
+&lt;p>&lt;a class="link" href="https://www.cnblogs.com/liuzhihang/p/elasticsearch-4.html" target="_blank" rel="noopener"
+>https://www.cnblogs.com/liuzhihang/p/elasticsearch-4.html&lt;/a>。ES 查询检索数据的过程。&amp;#160;&lt;a href="#fnref:8" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li id="fn:9">
+&lt;p>&lt;a class="link" href="https://www.cnblogs.com/ya-qiang/p/13680283.html" target="_blank" rel="noopener"
+>https://www.cnblogs.com/ya-qiang/p/13680283.html&lt;/a>。ClickHouse 的特性。&amp;#160;&lt;a href="#fnref:9" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;/div></description></item></channel></rss>

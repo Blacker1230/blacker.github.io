@@ -1,0 +1,202 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 笔者一直都是文本编辑器教派的忠实拥趸：期望将所有的任务都通过文本编辑，而非鼠标/触摸板等，进行实现。从早年的Vim，到现而今的Emacs，对文本化完成需求是越来越习惯，也越来越依赖了。最近刚好有了些时间，把最近的一些实践整理下。\n在之前的文章，emacs org-mode 绘制思维导图，中，笔者有提到在探索不跳出Emacs这一文本编辑器的情况下，完成思维导图绘制的需求。在翻了一些文章后，找到了一款神器：PlantUML。其完美的匹配了笔者的需求：\n不仅是思维导图，工程、文档常用的UML图像也能全部支持文本化表示； 功能强大，颜色、文本等格式均能支持； Emacs友好，而且可以集成到Org-mode里使用。 而且，PlantUML支持在线使用，意味着能够很方便的获取、使用。这里做下介绍。\n"><title>PlantUML-文本化绘制UML多类图表</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/plantuml-%E6%96%87%E6%9C%AC%E5%8C%96%E7%BB%98%E5%88%B6uml%E5%A4%9A%E7%B1%BB%E5%9B%BE%E8%A1%A8/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="PlantUML-文本化绘制UML多类图表"><meta property='og:description' content=" 笔者一直都是文本编辑器教派的忠实拥趸：期望将所有的任务都通过文本编辑，而非鼠标/触摸板等，进行实现。从早年的Vim，到现而今的Emacs，对文本化完成需求是越来越习惯，也越来越依赖了。最近刚好有了些时间，把最近的一些实践整理下。\n在之前的文章，emacs org-mode 绘制思维导图，中，笔者有提到在探索不跳出Emacs这一文本编辑器的情况下，完成思维导图绘制的需求。在翻了一些文章后，找到了一款神器：PlantUML。其完美的匹配了笔者的需求：\n不仅是思维导图，工程、文档常用的UML图像也能全部支持文本化表示； 功能强大，颜色、文本等格式均能支持； Emacs友好，而且可以集成到Org-mode里使用。 而且，PlantUML支持在线使用，意味着能够很方便的获取、使用。这里做下介绍。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/plantuml-%E6%96%87%E6%9C%AC%E5%8C%96%E7%BB%98%E5%88%B6uml%E5%A4%9A%E7%B1%BB%E5%9B%BE%E8%A1%A8/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='emacs'><meta property='article:tag' content='plantuml'><meta property='article:published_time' content='2023-04-21T20:51:00+00:00'><meta property='article:modified_time' content='2023-04-21T20:51:00+00:00'><meta name=twitter:title content="PlantUML-文本化绘制UML多类图表"><meta name=twitter:description content=" 笔者一直都是文本编辑器教派的忠实拥趸：期望将所有的任务都通过文本编辑，而非鼠标/触摸板等，进行实现。从早年的Vim，到现而今的Emacs，对文本化完成需求是越来越习惯，也越来越依赖了。最近刚好有了些时间，把最近的一些实践整理下。\n在之前的文章，emacs org-mode 绘制思维导图，中，笔者有提到在探索不跳出Emacs这一文本编辑器的情况下，完成思维导图绘制的需求。在翻了一些文章后，找到了一款神器：PlantUML。其完美的匹配了笔者的需求：\n不仅是思维导图，工程、文档常用的UML图像也能全部支持文本化表示； 功能强大，颜色、文本等格式均能支持； Emacs友好，而且可以集成到Org-mode里使用。 而且，PlantUML支持在线使用，意味着能够很方便的获取、使用。这里做下介绍。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><aside class="sidebar right-sidebar sticky"><section class="widget archives"><div class=widget-icon><svg class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><line x1="11" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="13" y2="20"/></svg></div><h2 class="widget-title section-title">目录</h2><div class=widget--toc><nav id=TableOfContents><ol><li><a href=#一依赖内容>一、依赖内容</a></li><li><a href=#二plantuml-介绍>二、plantuml 介绍</a></li><li><a href=#三思维导图>三、思维导图</a><ol><li><a href=#31-一个简单的思维导图>3.1 一个简单的思维导图</a></li><li><a href=#32-编译输出>3.2 编译输出</a></li></ol></li><li><a href=#四时序图>四、时序图</a><ol><li><a href=#41-一个简单的时序图>4.1 一个简单的时序图</a></li><li><a href=#42-编译输出>4.2 编译输出</a></li></ol></li></ol></nav></div></section></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/%E7%A8%8B%E5%BA%8F%E4%BA%BA%E7%94%9F/ style=background-color:#2a9d8f;color:#fff>程序人生</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/plantuml-%E6%96%87%E6%9C%AC%E5%8C%96%E7%BB%98%E5%88%B6uml%E5%A4%9A%E7%B1%BB%E5%9B%BE%E8%A1%A8/>PlantUML-文本化绘制UML多类图表</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Apr 21, 2023</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 3 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>笔者一直都是文本编辑器教派的忠实拥趸：期望将所有的任务都通过文本编辑，而非鼠标/触摸板等，进行实现。从早年的<code>Vim</code>，到现而今的<code>Emacs</code>，对文本化完成需求是越来越习惯，也越来越依赖了。最近刚好有了些时间，把最近的一些实践整理下。</p></blockquote><p>在之前的文章，<a class=link href=https://liyan-ah.github.io/2023/02/10/emacs-org-mode%E7%BB%98%E5%88%B6%E6%80%9D%E7%BB%B4%E5%AF%BC%E5%9B%BE/ target=_blank rel=noopener>emacs org-mode 绘制思维导图</a>，中，笔者有提到在探索不跳出<code>Emacs</code>这一文本编辑器的情况下，完成思维导图绘制的需求。在翻了一些文章后，找到了一款神器：<a class=link href=https://plantuml.com/zh/ target=_blank rel=noopener>PlantUML</a>。其完美的匹配了笔者的需求：</p><ol><li>不仅是思维导图，工程、文档常用的<code>UML</code>图像也能全部支持文本化表示；</li><li>功能强大，颜色、文本等格式均能支持；</li><li><code>Emacs</code>友好，而且可以集成到<code>Org-mode</code>里使用。</li></ol><p>而且，<code>PlantUML</code>支持在线使用，意味着能够很方便的获取、使用。这里做下介绍。</p><h2 id=一依赖内容><a href=#%e4%b8%80%e4%be%9d%e8%b5%96%e5%86%85%e5%ae%b9>#</a>
+一、依赖内容</h2><p>这里先列一下笔者使用时的配置：</p><ol><li><code>plantuml.jar</code>，安装在本地后，可以通过配置，在本地进行文本->多格式输出的编译。<a class=link href=https://plantuml.com/zh/download target=_blank rel=noopener>plantuml.jar 下载</a>；</li><li><code>plantuml</code> 配置。由于笔者还是使用的<code>Emacs</code>，这里列一下参照官网配置的<code>Emacs</code>设置。</li></ol><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span><span class=lnt>9
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=p>;;</span> <span class=n>plantuml</span>
+</span></span><span class=line><span class=cl><span class=p>;;</span> <span class=err>安装</span> <span class=n>plantuml</span><span class=o>-</span><span class=n>mode</span>
+</span></span><span class=line><span class=cl><span class=p>(</span><span class=n>ensure</span><span class=o>-</span><span class=n>package</span><span class=o>-</span><span class=n>installed</span> <span class=s1>&#39;plantuml-mode) </span>
+</span></span><span class=line><span class=cl><span class=p>;;</span> <span class=err>设置</span> <span class=n>plantuml</span><span class=o>.</span><span class=n>jar</span> <span class=err>的本地路径</span>
+</span></span><span class=line><span class=cl><span class=p>(</span><span class=n>setq</span> <span class=n>org</span><span class=o>-</span><span class=n>plantuml</span><span class=o>-</span><span class=n>jar</span><span class=o>-</span><span class=n>path</span> <span class=p>(</span><span class=n>expand</span><span class=o>-</span><span class=n>file</span><span class=o>-</span><span class=n>name</span> <span class=s2>&#34;~/.emacs.d/tools/plantuml.jar&#34;</span><span class=p>))</span> 
+</span></span><span class=line><span class=cl><span class=p>;;</span> <span class=err>将</span> <span class=o>.</span><span class=n>plantuml</span> <span class=err>后缀文件默认以</span> <span class=n>plantuml</span><span class=o>-</span><span class=n>mode</span> <span class=err>打开。非必需，后面都在</span> <span class=n>org</span><span class=o>-</span><span class=n>mode</span> <span class=err>里使用了</span>
+</span></span><span class=line><span class=cl><span class=p>(</span><span class=n>add</span><span class=o>-</span><span class=n>to</span><span class=o>-</span><span class=n>list</span> <span class=s1>&#39;auto-mode-alist &#39;</span><span class=p>(</span><span class=s2>&#34;\.plantuml</span><span class=se>\&#39;</span><span class=s2>&#34;</span> <span class=o>.</span> <span class=n>plantuml</span><span class=o>-</span><span class=n>mode</span><span class=p>))</span> 
+</span></span><span class=line><span class=cl><span class=p>;;</span> <span class=err>比较重要，在</span> <span class=n>org</span><span class=o>-</span><span class=n>mode</span> <span class=err>里声明</span> <span class=n>plantuml</span> 
+</span></span><span class=line><span class=cl><span class=p>(</span><span class=n>org</span><span class=o>-</span><span class=n>babel</span><span class=o>-</span><span class=k>do</span><span class=o>-</span><span class=nb>load</span><span class=o>-</span><span class=n>languages</span> <span class=s1>&#39;org-babel-load-languages &#39;</span><span class=p>((</span><span class=n>plantuml</span> <span class=o>.</span> <span class=n>t</span><span class=p>)))</span>  
+</span></span></code></pre></td></tr></table></div></div><p>配置很简单。下面就可以愉快的使用了。</p><h2 id=二plantuml-介绍><a href=#%e4%ba%8cplantuml-%e4%bb%8b%e7%bb%8d>#</a>
+二、plantuml 介绍</h2><p><a class=link href=https://plantuml.com/zh/ target=_blank rel=noopener>plantuml官网</a>，目前支持的部分图标类型：</p><ul><li>UML 图<ol><li>时序图</li><li>用例图</li><li>状态图</li><li>活动图</li><li>类图</li><li>用例图</li><li>等等</li></ol></li><li>非UML图<ol><li>思维导图</li><li>甘特图</li><li>工作分解结构图</li><li>等等</li></ol></li></ul><p>在官网中，对每种图都给出了教程及示例，可以通过<a class=link href=http://www.plantuml.com/plantuml/uml/SyfFKj2rKt3CoKnELR1Io4ZDoSa70000 target=_blank rel=noopener>在线生成</a> 进行感受。<br><code>PlantUML</code>的输入是文本，输出可以是<code>ASCII, PNG, SVG</code>等等格式。满足日常工作的需求。</p><h2 id=三思维导图><a href=#%e4%b8%89%e6%80%9d%e7%bb%b4%e5%af%bc%e5%9b%be>#</a>
+三、思维导图</h2><h3 id=31-一个简单的思维导图><a href=#31-%e4%b8%80%e4%b8%aa%e7%ae%80%e5%8d%95%e7%9a%84%e6%80%9d%e7%bb%b4%e5%af%bc%e5%9b%be>#</a>
+3.1 一个简单的思维导图</h3><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#+begin_src plantuml :file mindmap.png
+</span></span><span class=line><span class=cl>@startmindmap
+</span></span><span class=line><span class=cl>  &lt;style&gt;
+</span></span><span class=line><span class=cl>  mindmapDiagram {
+</span></span><span class=line><span class=cl>    .green {
+</span></span><span class=line><span class=cl>      BackgroundColor lightgreen
+</span></span><span class=line><span class=cl>     }
+</span></span><span class=line><span class=cl>    .yellow {
+</span></span><span class=line><span class=cl>      BackgroundColor yellow
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>    .rose{
+</span></span><span class=line><span class=cl>      BackgroundColor #FFBBCC
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>  }
+</span></span><span class=line><span class=cl>  &lt;/style&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  * emacs planuml 介绍 &lt;&lt;rose&gt;&gt;
+</span></span><span class=line><span class=cl>  left side
+</span></span><span class=line><span class=cl>  ** 依赖内容 &lt;&lt;yellow&gt;&gt;
+</span></span><span class=line><span class=cl>  ***_ plantuml.jar 安装
+</span></span><span class=line><span class=cl>  ***_ plantuml 配置
+</span></span><span class=line><span class=cl>  ** plantuml 介绍 &lt;&lt;yellow&gt;&gt;
+</span></span><span class=line><span class=cl>  ***_ 支持多种UML文本化编辑
+</span></span><span class=line><span class=cl>\
+</span></span><span class=line><span class=cl>  多种格式文件输出的组件
+</span></span><span class=line><span class=cl>  ***_ 在线体验
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  right side
+</span></span><span class=line><span class=cl>  ** 思维导图 &lt;&lt;green&gt;&gt;
+</span></span><span class=line><span class=cl>  ***_ 一个简单的思维导图
+</span></span><span class=line><span class=cl>  ***_ 编译输出
+</span></span><span class=line><span class=cl>  ** 时序图 &lt;&lt;green&gt;&gt;
+</span></span><span class=line><span class=cl>  ***_ 一个简单的时序图
+</span></span><span class=line><span class=cl>  ***_ 编译输出
+</span></span><span class=line><span class=cl>@endmindmap
+</span></span><span class=line><span class=cl>#+end_src
+</span></span></code></pre></td></tr></table></div></div><p>由于笔者已经在<code>Org-mode</code>里配置了<code>plantuml</code>，因此只要在<code>begin_src</code>后声明<code>plantuml</code>即可。通过<code>:file mindmap.png</code>指定了输出的文件为<code>png</code>格式内容。<code>C-c C-e</code>或者<code>org-export-dispatch</code>即可通过<code>org-mode</code>的输出界面触发编译、输出。</p><h3 id=32-编译输出><a href=#32-%e7%bc%96%e8%af%91%e8%be%93%e5%87%ba>#</a>
+3.2 编译输出</h3><p>输出结果：
+mindmap.png
+<img src=/mindmap.png loading=lazy alt="upload successful"></p><h2 id=四时序图><a href=#%e5%9b%9b%e6%97%b6%e5%ba%8f%e5%9b%be>#</a>
+四、时序图</h2><h3 id=41-一个简单的时序图><a href=#41-%e4%b8%80%e4%b8%aa%e7%ae%80%e5%8d%95%e7%9a%84%e6%97%b6%e5%ba%8f%e5%9b%be>#</a>
+4.1 一个简单的时序图</h3><p>这里来一点展示内容更丰富的<code>UML</code>时序图实际使用示例：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#+begin_src plantuml :file ngx_request.png
+</span></span><span class=line><span class=cl>    @startuml
+</span></span><span class=line><span class=cl>        title: nginx+php请求处理示例
+</span></span><span class=line><span class=cl>      [-&gt;nginx: &lt;font color=blue&gt;/caller_path
+</span></span><span class=line><span class=cl>      note right of nginx
+</span></span><span class=line><span class=cl>      nginx 视角:
+</span></span><span class=line><span class=cl>      caller=nginx,
+</span></span><span class=line><span class=cl>      caller_func=/caller_path,
+</span></span><span class=line><span class=cl>      callee=php,
+</span></span><span class=line><span class=cl>      callee_func=/index.php/caller_path
+</span></span><span class=line><span class=cl>      end note
+</span></span><span class=line><span class=cl>      activate nginx #yellow
+</span></span><span class=line><span class=cl>      nginx-&gt;php: &lt;font color=red&gt;/index.php/caller_path
+</span></span><span class=line><span class=cl>      activate php #yellow
+</span></span><span class=line><span class=cl>      note right of php #gray
+</span></span><span class=line><span class=cl>      laravel
+</span></span><span class=line><span class=cl>      end note
+</span></span><span class=line><span class=cl>      php-&gt;callee: &lt;font color=blue&gt;/callee_path
+</span></span><span class=line><span class=cl>      note right of php
+</span></span><span class=line><span class=cl>      php 视角:
+</span></span><span class=line><span class=cl>      caller=php,
+</span></span><span class=line><span class=cl>      caller_func=/index.php/caller_path,
+</span></span><span class=line><span class=cl>      callee=callee,
+</span></span><span class=line><span class=cl>      callee_func=callee_path
+</span></span><span class=line><span class=cl>      end note
+</span></span><span class=line><span class=cl>      activate callee
+</span></span><span class=line><span class=cl>      callee-&gt;php: response
+</span></span><span class=line><span class=cl>      deactivate callee
+</span></span><span class=line><span class=cl>      php-&gt;nginx: response
+</span></span><span class=line><span class=cl>      deactivate php
+</span></span><span class=line><span class=cl>      nginx-&gt;[: response
+</span></span><span class=line><span class=cl>      deactivate nginx
+</span></span><span class=line><span class=cl>      note over nginx, php #aqua: 实际四元组:
+</span></span><span class=line><span class=cl>\
+</span></span><span class=line><span class=cl>    caller=nginx
+</span></span><span class=line><span class=cl>caller_func=/caller_path,
+</span></span><span class=line><span class=cl>callee=callee,
+</span></span><span class=line><span class=cl>callee_func=callee_path,
+</span></span><span class=line><span class=cl>  @enduml
+</span></span><span class=line><span class=cl>#+end_src
+</span></span></code></pre></td></tr></table></div></div><h3 id=42-编译输出><a href=#42-%e7%bc%96%e8%af%91%e8%be%93%e5%87%ba>#</a>
+4.2 编译输出</h3><p>输出结果如下：
+ngx_request.png
+<img src=/ngx_request.png loading=lazy alt="upload successful">
+可以看到，基本上能够满足一般工程文档使用的需求。</p><p>以上是本次介绍的内容。周末愉快～</p></section><footer class=article-footer><section class=article-tags><a href=/tags/emacs/>Emacs</a>
+<a href=/tags/plantuml/>Plantuml</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/emacs-%E5%AD%97%E7%AC%A6%E6%93%8D%E4%BD%9C%E5%BF%AB%E6%8D%B7%E9%94%AE/><div class=article-details><h2 class=article-title>Emacs 字符操作快捷键</h2></div></a></article><article><a href=/p/emacs-org-mode-%E7%BB%98%E5%88%B6%E6%80%9D%E7%BB%B4%E5%AF%BC%E5%9B%BE/><div class=article-details><h2 class=article-title>emacs org-mode 绘制思维导图</h2></div></a></article><article><a href=/p/%E8%AE%A9emacs%E5%9C%A8%E4%BF%9D%E5%AD%98%E6%96%87%E4%BB%B6%E6%97%B6%E8%87%AA%E5%8A%A8%E6%A0%BC%E5%BC%8F%E5%8C%96%E4%BB%A3%E7%A0%81/><div class=article-details><h2 class=article-title>让emacs在保存文件时自动格式化代码</h2></div></a></article><article><a href=/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-30-%E6%9D%A1%E4%B8%8D%E4%BB%85%E4%BB%85%E6%98%AF%E5%8D%95%E6%B5%8B/><div class=article-details><h2 class=article-title>【译文/effective-rust】第 30 条：不仅仅是单测</h2></div></a></article><article><a href=/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-29-%E6%9D%A1%E9%81%B5%E5%BE%AA-clippy-%E7%9A%84%E5%BB%BA%E8%AE%AE/><div class=article-details><h2 class=article-title>【译文/effective-rust】第 29 条：遵循 Clippy 的建议</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

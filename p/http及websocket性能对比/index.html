@@ -1,0 +1,304 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 从过往的经历中来看，使用websocket作为http协议的替代似乎是一种潮流。websocket以其小包头、全双工的优势，弥补了http协议的性能上的缺陷。对于长链接需求，完全可以在初始化时创建websocket连接，在业务交互时直接进行通信，使得通信过程更加流畅。相信在基于Quic的http3协议走向成熟应用前，websocket在性能上都具有优势。本文以golang语言为基础，构造场景进行两种协议的性能对比。\n"><title>http及websocket性能对比</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/http%E5%8F%8Awebsocket%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="http及websocket性能对比"><meta property='og:description' content=" 从过往的经历中来看，使用websocket作为http协议的替代似乎是一种潮流。websocket以其小包头、全双工的优势，弥补了http协议的性能上的缺陷。对于长链接需求，完全可以在初始化时创建websocket连接，在业务交互时直接进行通信，使得通信过程更加流畅。相信在基于Quic的http3协议走向成熟应用前，websocket在性能上都具有优势。本文以golang语言为基础，构造场景进行两种协议的性能对比。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/http%E5%8F%8Awebsocket%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='websocket'><meta property='article:published_time' content='2021-07-15T19:29:10+00:00'><meta property='article:modified_time' content='2021-07-15T19:29:10+00:00'><meta name=twitter:title content="http及websocket性能对比"><meta name=twitter:description content=" 从过往的经历中来看，使用websocket作为http协议的替代似乎是一种潮流。websocket以其小包头、全双工的优势，弥补了http协议的性能上的缺陷。对于长链接需求，完全可以在初始化时创建websocket连接，在业务交互时直接进行通信，使得通信过程更加流畅。相信在基于Quic的http3协议走向成熟应用前，websocket在性能上都具有优势。本文以golang语言为基础，构造场景进行两种协议的性能对比。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/code/ style=background-color:#2a9d8f;color:#fff>Code</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/http%E5%8F%8Awebsocket%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94/>http及websocket性能对比</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jul 15, 2021</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 3 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>从过往的经历中来看，使用websocket作为http协议的替代似乎是一种潮流。websocket以其小包头、全双工的优势，弥补了http协议的性能上的缺陷。对于长链接需求，完全可以在初始化时创建websocket连接，在业务交互时直接进行通信，使得通信过程更加流畅。相信在基于Quic的http3协议走向成熟应用前，websocket在性能上都具有优势。本文以golang语言为基础，构造场景进行两种协议的性能对比。</p></blockquote><h1 id=场景><a href=#%e5%9c%ba%e6%99%af>#</a>
+场景</h1><p>在服务端分别启动了<code>http</code>服务及<code>websocket</code>服务，返回所接受到的信息。构造<code>BenchmarkHttp</code>、<code>BenchmarkWS</code>进行请求，发送递增字符串。</p><h1 id=代码><a href=#%e4%bb%a3%e7%a0%81>#</a>
+代码</h1><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span><span class=lnt>68
+</span><span class=lnt>69
+</span><span class=lnt>70
+</span><span class=lnt>71
+</span><span class=lnt>72
+</span><span class=lnt>73
+</span><span class=lnt>74
+</span><span class=lnt>75
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=n>server</span><span class=o>.</span><span class=n>go</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>/*</span>
+</span></span><span class=line><span class=cl>	<span class=n>golang中使用的是http1</span><span class=o>.</span><span class=mi>1</span><span class=err>协议，默认为长链接。仅第一次发送请求时进行握手。</span>
+</span></span><span class=line><span class=cl><span class=o>*/</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>package</span> <span class=n>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;flag&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;io&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;log&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;net/http&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;sync&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;github.com/gorilla/websocket&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>var</span> <span class=n>ws_addr</span> <span class=o>=</span> <span class=n>flag</span><span class=o>.</span><span class=n>String</span><span class=p>(</span><span class=s2>&#34;ws_addr&#34;</span><span class=p>,</span> <span class=s2>&#34;localhost:9080&#34;</span><span class=p>,</span> <span class=s2>&#34;websocket http service address&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=k>var</span> <span class=n>http_addr</span> <span class=o>=</span> <span class=n>flag</span><span class=o>.</span><span class=n>String</span><span class=p>(</span><span class=s2>&#34;http_addr&#34;</span><span class=p>,</span> <span class=s2>&#34;localhost:9090&#34;</span><span class=p>,</span> <span class=s2>&#34;http address address&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>var</span> <span class=n>upgrader</span> <span class=o>=</span> <span class=n>websocket</span><span class=o>.</span><span class=n>Upgrader</span><span class=p>{}</span> <span class=o>//</span> <span class=n>use</span> <span class=n>default</span> <span class=n>options</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>ws_echo</span><span class=p>(</span><span class=n>w</span> <span class=n>http</span><span class=o>.</span><span class=n>ResponseWriter</span><span class=p>,</span> <span class=n>r</span> <span class=o>*</span><span class=n>http</span><span class=o>.</span><span class=n>Request</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>c</span><span class=p>,</span> <span class=n>err</span> <span class=p>:</span><span class=o>=</span> <span class=n>upgrader</span><span class=o>.</span><span class=n>Upgrade</span><span class=p>(</span><span class=n>w</span><span class=p>,</span> <span class=n>r</span><span class=p>,</span> <span class=n>nil</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nb>log</span><span class=o>.</span><span class=n>Print</span><span class=p>(</span><span class=s2>&#34;upgrade:&#34;</span><span class=p>,</span> <span class=n>err</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>return</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>defer</span> <span class=n>c</span><span class=o>.</span><span class=n>Close</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>mt</span><span class=p>,</span> <span class=n>message</span><span class=p>,</span> <span class=n>err</span> <span class=p>:</span><span class=o>=</span> <span class=n>c</span><span class=o>.</span><span class=n>ReadMessage</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;read:&#34;</span><span class=p>,</span> <span class=n>err</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=k>break</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=nb>log</span><span class=o>.</span><span class=n>Printf</span><span class=p>(</span><span class=s2>&#34;recv: </span><span class=si>%s</span><span class=s2>&#34;</span><span class=p>,</span> <span class=n>message</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=n>err</span> <span class=o>=</span> <span class=n>c</span><span class=o>.</span><span class=n>WriteMessage</span><span class=p>(</span><span class=n>mt</span><span class=p>,</span> <span class=n>message</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;write:&#34;</span><span class=p>,</span> <span class=n>err</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=k>break</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>http_echo</span><span class=p>(</span><span class=n>w</span> <span class=n>http</span><span class=o>.</span><span class=n>ResponseWriter</span><span class=p>,</span> <span class=n>req</span> <span class=o>*</span><span class=n>http</span><span class=o>.</span><span class=n>Request</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>req</span><span class=o>.</span><span class=n>ParseForm</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>echo_data</span> <span class=p>:</span><span class=o>=</span> <span class=n>req</span><span class=o>.</span><span class=n>Form</span><span class=o>.</span><span class=n>Get</span><span class=p>(</span><span class=s2>&#34;echo&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>fmt</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=n>echo_data</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>io</span><span class=o>.</span><span class=n>WriteString</span><span class=p>(</span><span class=n>w</span><span class=p>,</span> <span class=n>echo_data</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>start_websocket</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>http</span><span class=o>.</span><span class=n>HandleFunc</span><span class=p>(</span><span class=s2>&#34;/ws_echo&#34;</span><span class=p>,</span> <span class=n>ws_echo</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=nb>log</span><span class=o>.</span><span class=n>Fatal</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>ListenAndServe</span><span class=p>(</span><span class=o>*</span><span class=n>ws_addr</span><span class=p>,</span> <span class=n>nil</span><span class=p>))</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>start_http</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>http</span><span class=o>.</span><span class=n>HandleFunc</span><span class=p>(</span><span class=s2>&#34;/http_echo&#34;</span><span class=p>,</span> <span class=n>http_echo</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=nb>log</span><span class=o>.</span><span class=n>Fatal</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>ListenAndServe</span><span class=p>(</span><span class=o>*</span><span class=n>http_addr</span><span class=p>,</span> <span class=n>nil</span><span class=p>))</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>flag</span><span class=o>.</span><span class=n>Parse</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=nb>log</span><span class=o>.</span><span class=n>SetFlags</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>wg</span> <span class=p>:</span><span class=o>=</span> <span class=n>sync</span><span class=o>.</span><span class=n>WaitGroup</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=n>wg</span><span class=o>.</span><span class=n>Add</span><span class=p>(</span><span class=mi>2</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>go</span> <span class=n>start_websocket</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>go</span> <span class=n>start_http</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>wg</span><span class=o>.</span><span class=n>Wait</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=c1>// web_test.go
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;io/ioutil&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;net/http&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;net/url&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;strconv&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;testing&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;github.com/gorilla/websocket&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>BenchmarkHttp</span><span class=p>(</span><span class=nx>b</span> <span class=o>*</span><span class=nx>testing</span><span class=p>.</span><span class=nx>B</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>client</span> <span class=o>:=</span> <span class=o>&amp;</span><span class=nx>http</span><span class=p>.</span><span class=nx>Client</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=nx>i</span> <span class=o>:=</span> <span class=mi>0</span><span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>b</span><span class=p>.</span><span class=nx>N</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>i_str</span> <span class=o>:=</span> <span class=nx>strconv</span><span class=p>.</span><span class=nf>Itoa</span><span class=p>(</span><span class=nx>i</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=nx>req</span><span class=p>,</span> <span class=nx>err</span> <span class=o>:=</span> <span class=nx>http</span><span class=p>.</span><span class=nf>NewRequest</span><span class=p>(</span><span class=nx>http</span><span class=p>.</span><span class=nx>MethodGet</span><span class=p>,</span> <span class=s>&#34;http://localhost:9090/http_echo?echo=&#34;</span><span class=o>+</span><span class=nx>i_str</span><span class=p>,</span> <span class=kc>nil</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=nx>err</span> <span class=o>!=</span> <span class=kc>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=s>&#34;create new request failed&#34;</span><span class=p>,</span> <span class=nx>err</span><span class=p>.</span><span class=nf>Error</span><span class=p>())</span>
+</span></span><span class=line><span class=cl>			<span class=k>return</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=c1>//b.ResetTimer()
+</span></span></span><span class=line><span class=cl><span class=c1></span>		<span class=nx>resp</span><span class=p>,</span> <span class=nx>err</span> <span class=o>:=</span> <span class=nx>client</span><span class=p>.</span><span class=nf>Do</span><span class=p>(</span><span class=nx>req</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=nx>err</span> <span class=o>!=</span> <span class=kc>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=s>&#34;got http request error&#34;</span><span class=p>,</span> <span class=nx>err</span><span class=p>.</span><span class=nf>Error</span><span class=p>())</span>
+</span></span><span class=line><span class=cl>			<span class=k>return</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=nx>_</span><span class=p>,</span> <span class=nx>_</span> <span class=p>=</span> <span class=nx>ioutil</span><span class=p>.</span><span class=nf>ReadAll</span><span class=p>(</span><span class=nx>resp</span><span class=p>.</span><span class=nx>Body</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=c1>//fmt.Println(string(body))
+</span></span></span><span class=line><span class=cl><span class=c1></span>	<span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>BenchmarkWs</span><span class=p>(</span><span class=nx>b</span> <span class=o>*</span><span class=nx>testing</span><span class=p>.</span><span class=nx>B</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>addr</span> <span class=o>:=</span> <span class=s>&#34;localhost:9080&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=nx>u</span> <span class=o>:=</span> <span class=nx>url</span><span class=p>.</span><span class=nx>URL</span><span class=p>{</span><span class=nx>Scheme</span><span class=p>:</span> <span class=s>&#34;ws&#34;</span><span class=p>,</span> <span class=nx>Host</span><span class=p>:</span> <span class=nx>addr</span><span class=p>,</span> <span class=nx>Path</span><span class=p>:</span> <span class=s>&#34;/ws_echo&#34;</span><span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nx>c</span><span class=p>,</span> <span class=nx>_</span><span class=p>,</span> <span class=nx>err</span> <span class=o>:=</span> <span class=nx>websocket</span><span class=p>.</span><span class=nx>DefaultDialer</span><span class=p>.</span><span class=nf>Dial</span><span class=p>(</span><span class=nx>u</span><span class=p>.</span><span class=nf>String</span><span class=p>(),</span> <span class=kc>nil</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=nx>err</span> <span class=o>!=</span> <span class=kc>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=s>&#34;Error, create websocket connect failed&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>return</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=nx>i</span> <span class=o>:=</span> <span class=mi>0</span><span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>b</span><span class=p>.</span><span class=nx>N</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nx>err</span> <span class=p>=</span> <span class=nx>c</span><span class=p>.</span><span class=nf>WriteMessage</span><span class=p>(</span><span class=nx>websocket</span><span class=p>.</span><span class=nx>TextMessage</span><span class=p>,</span> <span class=p>[]</span><span class=nb>byte</span><span class=p>(</span><span class=nx>strconv</span><span class=p>.</span><span class=nf>Itoa</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=nx>err</span> <span class=o>!=</span> <span class=kc>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=s>&#34;write ws message failed, &#34;</span><span class=p>,</span> <span class=nx>err</span><span class=p>.</span><span class=nf>Error</span><span class=p>())</span>
+</span></span><span class=line><span class=cl>			<span class=k>continue</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=nx>_</span><span class=p>,</span> <span class=nx>message</span><span class=p>,</span> <span class=nx>err</span> <span class=o>:=</span> <span class=nx>c</span><span class=p>.</span><span class=nf>ReadMessage</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>		<span class=k>if</span> <span class=nx>err</span> <span class=o>!=</span> <span class=kc>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=s>&#34;Error, recv message failed&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nb>string</span><span class=p>(</span><span class=nx>message</span><span class=p>))</span>
+</span></span><span class=line><span class=cl>			<span class=k>continue</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=c1>//fmt.Println(string(message))
+</span></span></span><span class=line><span class=cl><span class=c1></span>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nx>err</span> <span class=p>=</span> <span class=nx>c</span><span class=p>.</span><span class=nf>WriteMessage</span><span class=p>(</span><span class=nx>websocket</span><span class=p>.</span><span class=nx>CloseMessage</span><span class=p>,</span> <span class=nx>websocket</span><span class=p>.</span><span class=nf>FormatCloseMessage</span><span class=p>(</span><span class=nx>websocket</span><span class=p>.</span><span class=nx>CloseNormalClosure</span><span class=p>,</span> <span class=s>&#34;&#34;</span><span class=p>))</span>
+</span></span><span class=line><span class=cl>	<span class=nx>c</span><span class=p>.</span><span class=nf>Close</span><span class=p>()</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><h1 id=结果><a href=#%e7%bb%93%e6%9e%9c>#</a>
+结果</h1><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>go test -bench=. -benchtime=3s -run=none
+</span></span><span class=line><span class=cl>BenchmarkHttp-8   	   57764	     62737 ns/op
+</span></span><span class=line><span class=cl>BenchmarkWs-8     	  101538	     36740 ns/op
+</span></span><span class=line><span class=cl>PASS
+</span></span><span class=line><span class=cl>ok  	web_perf	8.850s
+</span></span></code></pre></td></tr></table></div></div><p>从结果中可以直观的看到，<code>websocket</code>协议有明显的性能优势。</p><h1 id=问题结论><a href=#%e9%97%ae%e9%a2%98%e7%bb%93%e8%ae%ba>#</a>
+问题结论</h1><p>上次提出了两个问题，后来经过测试，有了结论。这里贴一下。</p><ul><li>单个goroutine 崩溃时，该进程内其他的goroutine也会崩溃。通常的做法是使用一层wrapper，进行recover获取及现场、日志等保存；</li><li>golang中线程的实现，runtime中，初始化时会申请内核态线程；见<code>runtime/proc.go</code>；</li></ul><h1 id=问题思考><a href=#%e9%97%ae%e9%a2%98%e6%80%9d%e8%80%83>#</a>
+问题思考</h1><ul><li>http1.0, http1.1, http2.0, http3.0, websocket, quic协议的介绍；</li><li>rpc调用与websocket通信之间的网络延时对比；</li></ul><h1 id=文章推荐><a href=#%e6%96%87%e7%ab%a0%e6%8e%a8%e8%8d%90>#</a>
+文章推荐</h1><p><a class=link href="https://mp.weixin.qq.com/s?__biz=MzAwMDAxNjU4Mg==&amp;mid=2247484725&amp;idx=1&amp;sn=63941cdb8ba8961457ae7667eed84448&amp;scene=21#wechat_redirect" target=_blank rel=noopener>net/http长链接&连接池使用时的超时陷阱</a>
+<a class=link href=https://blog.csdn.net/qq_39898645/article/details/109181736 target=_blank rel=noopener>换电脑后，hexo-next 窝火的报错</a>
+<a class=link href=https://blog.csdn.net/diaosssss/article/details/92830934 target=_blank rel=noopener>golang调度器初始化</a></p></section><footer class=article-footer><section class=article-tags><a href=/tags/websocket/>Websocket</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/3-sum-%E9%97%AE%E9%A2%98/><div class=article-details><h2 class=article-title>3-sum 问题</h2></div></a></article><article><a href=/p/%E5%90%88%E5%B9%B6%E5%8C%BA%E9%97%B4/><div class=article-details><h2 class=article-title>合并区间</h2></div></a></article><article><a href=/p/x86_64-%E5%AF%84%E5%AD%98%E5%99%A8%E4%BC%A0%E5%8F%82%E6%96%B9%E5%BC%8F/><div class=article-details><h2 class=article-title>x86_64 寄存器传参方式</h2></div></a></article><article><a href=/p/golang-proto3-%E4%BD%BF%E7%94%A8/><div class=article-details><h2 class=article-title>golang proto3 使用</h2></div></a></article><article><a href=/p/centos-%E5%AE%89%E8%A3%85docker%E5%B9%B6%E6%9E%84%E5%BB%BAgolang%E9%95%9C%E5%83%8F/><div class=article-details><h2 class=article-title>centos 安装docker并构建golang镜像</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

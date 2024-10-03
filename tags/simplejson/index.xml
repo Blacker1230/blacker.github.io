@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Simplejson on 李岩</title><link>https://liyan-ah.github.io/tags/simplejson/</link><description>Recent content in Simplejson on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Thu, 22 Jul 2021 17:58:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/simplejson/index.xml" rel="self" type="application/rss+xml"/><item><title>go-simplejson 插入数组</title><link>https://liyan-ah.github.io/p/go-simplejson-%E6%8F%92%E5%85%A5%E6%95%B0%E7%BB%84/</link><pubDate>Thu, 22 Jul 2021 17:58:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/go-simplejson-%E6%8F%92%E5%85%A5%E6%95%B0%E7%BB%84/</guid><description>&lt;blockquote>
+&lt;p>&lt;a class="link" href="https://github.com/bitly/go-simplejson" target="_blank" rel="noopener"
+>go-simplejson&lt;/a>是go lang语言中操作json非常方便的开源库。最近使用simplejson进行数据插入操作时遇到了问题，经过排查后最终解决。现记录如下。&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="问题描述">
+&lt;a href="#%e9%97%ae%e9%a2%98%e6%8f%8f%e8%bf%b0">#&lt;/a>
+问题描述
+&lt;/h1>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">创建了一个&lt;/span>&lt;span class="n">json对象J&lt;/span>&lt;span class="err">，需要从其他地方获取剩余&lt;/span>&lt;span class="n">json信息后&lt;/span>&lt;span class="err">，插入到&lt;/span>&lt;span class="n">J中的data字段中&lt;/span>&lt;span class="err">。初始版本如下：&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">simplejson&lt;/span> &lt;span class="s2">&amp;#34;github.com/bitly/go-simplejson&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewJson&lt;/span>&lt;span class="p">([]&lt;/span>&lt;span class="n">byte&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;errno&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;errmsg&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">js_2&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Json&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">*&lt;/span>&lt;span class="n">js_2&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">js&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsArr&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="p">[]&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Json&lt;/span>&lt;span class="p">{}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewJson&lt;/span>&lt;span class="p">([]&lt;/span>&lt;span class="n">byte&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewJson&lt;/span>&lt;span class="p">([]&lt;/span>&lt;span class="n">byte&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsArr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">append&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">jsArr&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">js1&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsArr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">append&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">jsArr&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">js2&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Set&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">jsArr&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Get&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GetIndex&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Set&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsB&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">js&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">MarshalJSON&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">fmt&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">string&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">jsB&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="o">%&lt;/span> &lt;span class="n">go&lt;/span> &lt;span class="n">run&lt;/span> &lt;span class="n">js_check&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">go&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="p">:[{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">},{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">2&lt;/span>&lt;span class="p">}],&lt;/span>&lt;span class="s2">&amp;#34;errmsg&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;errno&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="问题排查">
+&lt;a href="#%e9%97%ae%e9%a2%98%e6%8e%92%e6%9f%a5">#&lt;/a>
+问题排查
+&lt;/h1>&lt;p>经过&lt;code>dlv&lt;/code>逐行调试，实际问题出在&lt;code>js.Get(&amp;quot;data&amp;quot;).GetIndex(0).Set(&amp;quot;test&amp;quot;, 1)&lt;/code>中。跳转至定义，该操作实际做如下转换:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">arr, ok := js.Get(&amp;#34;data&amp;#34;).data.([]interface{})
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">if ok {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;amp;simplejson.Json(arr[index]).Set(&amp;#34;test&amp;#34;, 1)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这里由于&lt;code>jsArr&lt;/code>是&lt;code>[]*simplejson.Json&lt;/code>，类型断言为&lt;code>[]interface{}&lt;/code>失败。所以无法正常设置值。查看&lt;code>simplejson.go&lt;/code>，其中的&lt;code>Json&lt;/code>对象结构如下：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">type Json struct {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> data interface{}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>其实可以通过&lt;code>js.Interface()&lt;/code>获取其中的真实数据。&lt;/p>
+&lt;h1 id="解决方案">
+&lt;a href="#%e8%a7%a3%e5%86%b3%e6%96%b9%e6%a1%88">#&lt;/a>
+解决方案
+&lt;/h1>&lt;p>变更为如下代码即可：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="n">package&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">simplejson&lt;/span> &lt;span class="s2">&amp;#34;github.com/bitly/go-simplejson&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewJson&lt;/span>&lt;span class="p">([]&lt;/span>&lt;span class="n">byte&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;errno&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;errmsg&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">js_2&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Json&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">*&lt;/span>&lt;span class="n">js_2&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">js&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsArr&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="p">[]&lt;/span>&lt;span class="n">interface&lt;/span>&lt;span class="p">{}{}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewJson&lt;/span>&lt;span class="p">([]&lt;/span>&lt;span class="n">byte&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">simplejson&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewJson&lt;/span>&lt;span class="p">([]&lt;/span>&lt;span class="n">byte&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="err">`&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsArr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">append&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">jsArr&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">js1&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Interface&lt;/span>&lt;span class="p">())&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsArr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">append&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">jsArr&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">js2&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Interface&lt;/span>&lt;span class="p">())&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Set&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">jsArr&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">js&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Get&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GetIndex&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Set&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">jsB&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">js&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">MarshalJSON&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">fmt&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">string&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">jsB&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="o">%&lt;/span> &lt;span class="n">go&lt;/span> &lt;span class="n">run&lt;/span> &lt;span class="n">js_check&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">go&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="p">:[{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">},{&lt;/span>&lt;span class="s2">&amp;#34;num&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">2&lt;/span>&lt;span class="p">}],&lt;/span>&lt;span class="s2">&amp;#34;errmsg&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;test&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="s2">&amp;#34;errno&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div></description></item></channel></rss>

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Clang-Format on 李岩</title><link>https://liyan-ah.github.io/tags/clang-format/</link><description>Recent content in Clang-Format on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Fri, 15 Jul 2022 20:34:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/clang-format/index.xml" rel="self" type="application/rss+xml"/><item><title>让emacs在保存文件时自动格式化代码</title><link>https://liyan-ah.github.io/p/%E8%AE%A9emacs%E5%9C%A8%E4%BF%9D%E5%AD%98%E6%96%87%E4%BB%B6%E6%97%B6%E8%87%AA%E5%8A%A8%E6%A0%BC%E5%BC%8F%E5%8C%96%E4%BB%A3%E7%A0%81/</link><pubDate>Fri, 15 Jul 2022 20:34:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/%E8%AE%A9emacs%E5%9C%A8%E4%BF%9D%E5%AD%98%E6%96%87%E4%BB%B6%E6%97%B6%E8%87%AA%E5%8A%A8%E6%A0%BC%E5%BC%8F%E5%8C%96%E4%BB%A3%E7%A0%81/</guid><description>&lt;blockquote>
+&lt;p>&lt;a class="link" href="https://liam.page/" target="_blank" rel="noopener"
+>liam&lt;/a>同学在&lt;a class="link" href="https://liam.page/2020/11/04/Vim-auto-format-codes-on-save/" target="_blank" rel="noopener"
+>让 Vim 在保存文件时自动格式化代码&lt;/a>一文中展示了保存时自动化格式代码的&lt;code>vim&lt;/code>配置。作为&lt;code>emacs&lt;/code>用户，自然有自己的解决方案。以下呈现。&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="配置">
+&lt;a href="#%e9%85%8d%e7%bd%ae">#&lt;/a>
+配置
+&lt;/h1>&lt;p>&lt;code>emacs&lt;/code>进行&lt;code>c/c++&lt;/code>的开发，离不开支持代码自动补全、库函数联想等功能，所以本文顺带把&lt;a class="link" href="https://microsoft.github.io/language-server-protocol/" target="_blank" rel="noopener"
+>&lt;code>lsp&lt;/code>&lt;/a>配置也一并带上了，不同于&lt;a class="link" href="https://blacker1230.github.io/2021/10/12/emacs-%E8%8B%A5%E5%B9%B2%E8%AF%AD%E8%A8%80-lsp-%E9%85%8D%E7%BD%AE%E5%A4%87%E6%B3%A8/" target="_blank" rel="noopener"
+>emacs-若干语言 lsp 配置备注&lt;/a>里的&lt;code>eglot&lt;/code>，这里使用的是&lt;code>ccls&lt;/code>。直接上配置吧，比较简单：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="err">使用国内&lt;/span> &lt;span class="n">elpa&lt;/span> &lt;span class="err">源来加速插件安装&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">pkg&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;;&lt;/span> &lt;span class="n">would&lt;/span> &lt;span class="n">be&lt;/span> &lt;span class="n">a&lt;/span> &lt;span class="n">wrapper&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">require&lt;/span> &lt;span class="s1">&amp;#39;package)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">setq&lt;/span> &lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">archives&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s1">&amp;#39;((&amp;#34;gnu&amp;#34; . &amp;#34;http://mirrors.tuna.tsinghua.edu.cn/elpa/gnu/&amp;#34;)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;melpa&amp;#34;&lt;/span> &lt;span class="o">.&lt;/span> &lt;span class="s2">&amp;#34;http://mirrors.tuna.tsinghua.edu.cn/elpa/melpa/&amp;#34;&lt;/span>&lt;span class="p">)))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">initialize&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">refresh&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">contents&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">p&lt;/span> &lt;span class="n">pkg&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span> &lt;span class="n">pkg&lt;/span>&lt;span class="p">)))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="err">辅助判断插件安装通用函数&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">ensure&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">installed&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">rest&lt;/span> &lt;span class="n">packages&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;Assure every package was installed, ask for installation if it&amp;#39;s not.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">a&lt;/span> &lt;span class="n">list&lt;/span> &lt;span class="n">of&lt;/span> &lt;span class="n">installed&lt;/span> &lt;span class="n">packages&lt;/span> &lt;span class="ow">or&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="n">every&lt;/span> &lt;span class="n">skipped&lt;/span> &lt;span class="n">package&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">mapcar&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">lambda&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">p&lt;/span> &lt;span class="n">package&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">y&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="ow">or&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">n&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">p&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="s2">&amp;#34;Package &lt;/span>&lt;span class="si">%s&lt;/span>&lt;span class="s2"> is missing. Install it?&amp;#34;&lt;/span> &lt;span class="n">package&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span> &lt;span class="n">package&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">package&lt;/span>&lt;span class="p">)))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">packages&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">clang&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="err">在文件保存时格式化代码&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">ensure&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">installed&lt;/span> &lt;span class="s1">&amp;#39;clang-format)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">clang&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">on&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;Create a buffer local save hook.&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;before-save-hook&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">lambda&lt;/span> &lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">when&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">locate&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">dominating&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">file&lt;/span> &lt;span class="s2">&amp;#34;.&amp;#34;&lt;/span> &lt;span class="s2">&amp;#34;.clang-format&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">clang&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">buffer&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;;&lt;/span> &lt;span class="n">Continue&lt;/span> &lt;span class="n">to&lt;/span> &lt;span class="n">save&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">nil&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;;&lt;/span> &lt;span class="n">Buffer&lt;/span> &lt;span class="n">local&lt;/span> &lt;span class="n">hook&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">t&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Run&lt;/span> &lt;span class="n">this&lt;/span> &lt;span class="n">hook&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">++-&lt;/span>&lt;span class="n">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;c-mode-hook (lambda () (clang-format-on-save-hook)))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;c++-mode-hook (lambda () (clang-format-on-save-hook)))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">create&lt;/span> &lt;span class="n">default&lt;/span> &lt;span class="n">clang&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">file&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">https&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">//&lt;/span>&lt;span class="n">releases&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">llvm&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">org&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mf">3.6&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="mi">2&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">tools&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">docs&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">ClangFormatStyleOptions&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">html&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">clang&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="n">style&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">llvm&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="n">dump&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">config&lt;/span> &lt;span class="o">&amp;gt;&lt;/span> &lt;span class="o">.&lt;/span>&lt;span class="n">clang&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="err">另外，这里列出使用的&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">language&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">server&lt;/span> &lt;span class="err">配置。&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="err">服务端使用&lt;/span> &lt;span class="n">ccls&lt;/span>&lt;span class="err">，客户端则使用&lt;/span> &lt;span class="n">ccls&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">el&lt;/span>&lt;span class="err">。同时将&lt;/span> &lt;span class="n">ccls&lt;/span> &lt;span class="err">作为&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="err">的&lt;/span>&lt;span class="n">hook运行&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">https&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">//&lt;/span>&lt;span class="n">github&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">com&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">MaskRay&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">ccls&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">wiki&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">Build&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">set&lt;/span> &lt;span class="n">up&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">++&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">ensure&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">installed&lt;/span> &lt;span class="s1">&amp;#39;ccls)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">use&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">package&lt;/span> &lt;span class="n">ccls&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">:&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">++-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="n">objc&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="n">cuda&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">lambda&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">require&lt;/span> &lt;span class="s1">&amp;#39;ccls) (lsp))))&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>代码格式部分则主要由&lt;code>.clang-format&lt;/code>文件控制。其配置方法可以参见官网：&lt;a class="link" href="https://clang.llvm.org/docs/ClangFormat.html" target="_blank" rel="noopener"
+>ClangFormat&lt;/a>。&lt;/p></description></item></channel></rss>

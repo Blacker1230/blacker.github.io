@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Python on 李岩</title><link>https://liyan-ah.github.io/tags/python/</link><description>Recent content in Python on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Tue, 12 Oct 2021 20:26:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/python/index.xml" rel="self" type="application/rss+xml"/><item><title>emacs-若干语言 lsp 配置备注</title><link>https://liyan-ah.github.io/p/emacs-%E8%8B%A5%E5%B9%B2%E8%AF%AD%E8%A8%80-lsp-%E9%85%8D%E7%BD%AE%E5%A4%87%E6%B3%A8/</link><pubDate>Tue, 12 Oct 2021 20:26:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/emacs-%E8%8B%A5%E5%B9%B2%E8%AF%AD%E8%A8%80-lsp-%E9%85%8D%E7%BD%AE%E5%A4%87%E6%B3%A8/</guid><description>&lt;blockquote>
+&lt;p>微软推出的&lt;a class="link" href="https://microsoft.github.io/language-server-protocol/#:~:text=Language%20Server%20Protocol.%20The%20Language%20Server%20Protocol%20%28LSP%29,is%20to%20support%20rich%20code%20navigation%20in%20" target="_blank" rel="noopener"
+>language server protol&lt;/a> 确实提升了文本编辑器的使用体验。就 &lt;code>emacs&lt;/code> 的使用而言，配合各个语言的 lsp 实现，能够减少配置语言开发环境的难度。这里记录一下使用 &lt;code>emacs&lt;/code> 中的 rust, golang, python, c/c++ lsp 配置&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="rust">
+&lt;a href="#rust">#&lt;/a>
+rust
+&lt;/h1>&lt;p>这里使用 &lt;code>rust-analyzer&lt;/code> 作为 &lt;code>rust&lt;/code> 的语言服务器，在安装 &lt;code>rust-mode&lt;/code>后，通过绑定语言服务器信息，即可在打开由 &lt;code>cargo&lt;/code> 创建的工程时，顺利进入 &lt;code>lsp-mode&lt;/code>。需要关注的是，在非&lt;code>cargo&lt;/code>创建的项目中，笔者的&lt;code>lsp-mode&lt;/code>使用体验很差，甚至缺少代码补充、语法提示等功能。可能是&lt;code>rust-analyzer&lt;/code>主要是针对&lt;code>cargo&lt;/code>项目进行的设置，也可能是笔者设置的问题。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go">&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="nx">config&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">lsp&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="nx">emacs&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="nx">rls&lt;/span> &lt;span class="nx">install&lt;/span> &lt;span class="nx">address&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="nx">https&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="c1">//github.com/rust-lang-nursery/rls
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nf">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kn">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">p&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">install&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">to&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">list&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">auto&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">alist&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;\.rs\&amp;#39;&amp;#34;&lt;/span> &lt;span class="p">.&lt;/span> &lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">lsp&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nf">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kn">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">p&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">install&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nf">unless&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kn">package&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">installed&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">p&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">cargo&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">w&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">install&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">cargo&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">use&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="kn">package&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">compatible&lt;/span> &lt;span class="nx">rust&lt;/span> &lt;span class="nf">mode&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">hook&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">mode&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nf">hook&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nf">lambda&lt;/span> &lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">server&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">analyzer&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">not&lt;/span> &lt;span class="nf">rls&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">analyzer&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">server&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">command&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;/opt/homebrew/bin/rust-analyzer&amp;#34;&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">format&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">on&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">save&lt;/span> &lt;span class="nx">t&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">has&lt;/span> &lt;span class="nx">annoying&lt;/span> &lt;span class="nx">bug&lt;/span> &lt;span class="nx">move&lt;/span> &lt;span class="nx">point&lt;/span> &lt;span class="nx">to&lt;/span> &lt;span class="nx">other&lt;/span> &lt;span class="nx">buffer&lt;/span> &lt;span class="nf">bug&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">indent&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">offset&lt;/span> &lt;span class="mi">4&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">match&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">angle&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">brackets&lt;/span> &lt;span class="kc">nil&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;;&lt;/span> &lt;span class="nx">thought&lt;/span> &lt;span class="nx">this&lt;/span> &lt;span class="nx">would&lt;/span> &lt;span class="nx">be&lt;/span> &lt;span class="nx">better&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">was&lt;/span> &lt;span class="nx">wrong&lt;/span>&lt;span class="p">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">;(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">rustic&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">compile&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">display&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">method&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">popwin&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="nx">display&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">buffer&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">;&lt;/span> &lt;span class="nx">display&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="nx">possible&lt;/span> &lt;span class="nx">in&lt;/span> &lt;span class="nx">popup&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">win&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">use&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="kn">package&lt;/span> &lt;span class="nx">cargo&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="nx">setq&lt;/span> &lt;span class="nx">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">server&lt;/span> &lt;span class="err">&amp;#39;&lt;/span>&lt;span class="nx">rust&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">analyzer&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="golang">
+&lt;a href="#golang">#&lt;/a>
+golang
+&lt;/h1>&lt;p>&lt;code>golang&lt;/code>作为谷歌的亲儿子，是拥有官方维护的语言服务器的。而且&lt;code>gopls&lt;/code>的使用体验非常好，完全不逊色与目前用户较多的&lt;code>goland&lt;/code>及&lt;code>vscode&lt;/code>。配合&lt;code>dlv-mode&lt;/code>使用，在调试上笔者认为能够更加的贴合&lt;code>unix&lt;/code>风格，也更加方便。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Go&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Set&lt;/span> &lt;span class="n">up&lt;/span> &lt;span class="n">before&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span> &lt;span class="n">hooks&lt;/span> &lt;span class="n">to&lt;/span> &lt;span class="n">format&lt;/span> &lt;span class="n">buffer&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">add&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">delete&lt;/span> &lt;span class="n">imports&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">go&lt;/span> &lt;span class="n">install&lt;/span> &lt;span class="n">github&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">com&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">golang&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">tools&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">cmd&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">gopls&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;(&lt;/span>&lt;span class="n">require&lt;/span> &lt;span class="s1">&amp;#39;lsp-mode)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">setq&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ui&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span> &lt;span class="n">nil&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hooks&lt;/span> &lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;before-save-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">format&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">buffer&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="n">t&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;before-save-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">organize&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">imports&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="n">t&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;go-mode-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">install&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">save&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hooks&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;;&lt;/span> &lt;span class="n">Start&lt;/span> &lt;span class="n">LSP&lt;/span> &lt;span class="n">Mode&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">YASnippet&lt;/span> &lt;span class="n">mode&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;go-mode-hook #&amp;#39;&lt;/span>&lt;span class="n">lsp&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">deferred&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">hook&lt;/span> &lt;span class="s1">&amp;#39;go-mode-hook #&amp;#39;&lt;/span>&lt;span class="n">yas&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">minor&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">mode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="python">
+&lt;a href="#python">#&lt;/a>
+python
+&lt;/h1>&lt;p>&lt;code>python&lt;/code>的语言服务器，笔者目前使用的是&lt;code>lsp-python-ms&lt;/code>进行配置的。这个插件解决了很多&lt;code>python lsp&lt;/code>的问题（实际上，在碰到这个插件之前，笔者一度要放弃安装&lt;code>python lsp&lt;/code>）。由于&lt;code>python&lt;/code>是解释型语言，对象的成员都较为灵活，一般编码阶段很难确认对象的成员及其确切的类型。所以在&lt;code>pylsp&lt;/code>使用过程中，往往会碰到无法有效提示的情况。满足一般提示需求吧。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;;; set env for python
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; copied from
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; https://gitee.com/nutora-emacs/lsp-python-ms
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; python lsp-server use python-lsp-server
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; install as: pip3 install python-lsp-server
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(ensure-package-installed &amp;#39;lsp-python-ms)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(require &amp;#39;lsp-python-ms)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(setq lsp-python-ms-auto-install-server t)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-hook &amp;#39;python-mode-hook #&amp;#39;lsp)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="cc">
+&lt;a href="#cc">#&lt;/a>
+c/c++
+&lt;/h1>&lt;p>实际上，笔者很喜欢&lt;code>c/c++&lt;/code>的语言服务器，简单、方便，安装时无比的顺畅。完全符合笔者对&lt;code>c&lt;/code>语言简单、强大、靠谱的印象。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;; set up lsp-mode for c/c++
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; brew install llvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">;; https://clangd.llvm.org/installation
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(unless (package-installed-p &amp;#39;eglot)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (w-install &amp;#39;eglot))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(require &amp;#39;eglot)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-to-list &amp;#39;eglot-server-programs &amp;#39;((c++-mode c-mode) &amp;#34;clangd&amp;#34;))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-hook &amp;#39;c-mode-hook &amp;#39;eglot-ensure)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(add-hook &amp;#39;c++-mode-hook &amp;#39;eglot-ensure)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="使用的一点备注">
+&lt;a href="#%e4%bd%bf%e7%94%a8%e7%9a%84%e4%b8%80%e7%82%b9%e5%a4%87%e6%b3%a8">#&lt;/a>
+使用的一点备注
+&lt;/h1>&lt;p>这里唠叨一点&lt;/p>
+&lt;h2 id="lsp-的管理单位是文件目录">
+&lt;a href="#lsp-%e7%9a%84%e7%ae%a1%e7%90%86%e5%8d%95%e4%bd%8d%e6%98%af%e6%96%87%e4%bb%b6%e7%9b%ae%e5%bd%95">#&lt;/a>
+lsp 的管理单位是文件目录
+&lt;/h2>&lt;p>这里对于&lt;code>golang&lt;/code>及&lt;code>rust&lt;/code>尤为明显。在使用&lt;code>emacs&lt;/code>打开一个关联了有效语言服务器的文件时，底部会提示为当前文件选择一个工作目录。尤其是，当路径&lt;code>A&lt;/code>已经设为工作目录时，再将&lt;code>A/B&lt;/code>设为工作目录，&lt;code>A/B&lt;/code>的打开状态是会出现异常的。所以尽量保持每个工作目录的独特。&lt;br>
+这里附上一些&lt;code>emacs lsp-mode&lt;/code>中笔者常用的函数：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">指令&lt;/th>
+&lt;th style="text-align: left">说明&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">&lt;code>lsp-workspace-folders-remove&lt;/code>&lt;/td>
+&lt;td style="text-align: left">将工作目录移除&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">&lt;code>lsp-workspace-folders-add&lt;/code>&lt;/td>
+&lt;td style="text-align: left">添加工作目录&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">&lt;code>lsp-workspace-restart&lt;/code>&lt;/td>
+&lt;td style="text-align: left">重启工作目录&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="其他备注">
+&lt;a href="#%e5%85%b6%e4%bb%96%e5%a4%87%e6%b3%a8">#&lt;/a>
+其他备注
+&lt;/h2>&lt;p>当安装了一个语言的&lt;code>lsp&lt;/code>服务及对应的&lt;code>emacs&lt;/code>客户端配置时，如果打开对应语言的文件发现&lt;code>lsp&lt;/code>没有生效，且打开&lt;code>toggle-debug-on-error&lt;/code>设置开启也没有发现任何报错，笔者建议重启&lt;code>emacs&lt;/code>。似乎&lt;code>emacs&lt;/code>热加载功能往往不会如人所愿。&lt;/p>
+&lt;h1 id="参考文献">
+&lt;a href="#%e5%8f%82%e8%80%83%e6%96%87%e7%8c%ae">#&lt;/a>
+参考文献
+&lt;/h1>&lt;p>&lt;a class="link" href="https://emacs-lsp.github.io/lsp-mode/" target="_blank" rel="noopener"
+>emacs lsp mode&lt;/a>&lt;br>
+及其他网络文献&lt;/p></description></item><item><title>python调试方法（其一）</title><link>https://liyan-ah.github.io/p/python%E8%B0%83%E8%AF%95%E6%96%B9%E6%B3%95%E5%85%B6%E4%B8%80/</link><pubDate>Wed, 17 Jul 2019 22:51:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/python%E8%B0%83%E8%AF%95%E6%96%B9%E6%B3%95%E5%85%B6%E4%B8%80/</guid><description>&lt;p>&amp;lt;一&amp;gt; 这里记录一些python调试的方法：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># coding=UTF-8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#39;&amp;#39;&amp;#39; python debug method 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">use print function to get output informatino
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#39;&amp;#39;&amp;#39;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">DEBUG = True
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">def _debug_(*args, **kwds):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#39;&amp;#39;&amp;#39; depends on DEBUG value, print some function &amp;#39;&amp;#39;&amp;#39;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> global DEBUG
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if DEBUG:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(args, kwds)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">if __name__ == &amp;#34;__main__&amp;#34;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> _debug_(&amp;#34;this is a test&amp;#34;)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>最常见的调试方法了。&lt;code>print&lt;/code>可以依据需求调整为其他的方式（&lt;code>logging&lt;/code>输出日志或者直接输出到文件中均可）。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># 输出结果如下：
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">((&amp;#39;this is a test&amp;#39;,), {})
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&amp;lt;二&amp;gt;然后就是更直接一些的调试方法了&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># coding=UTF-8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">import pdb
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">def test_function():
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#39;&amp;#39;&amp;#39; regard it as a test funcion &amp;#39;&amp;#39;&amp;#39;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> try:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> a = 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> b = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> c = a / b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> except Exception, e:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> pdb.set_trace()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">if __name__ == &amp;#34;__main__&amp;#34;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> test_function()
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>直接一点了，直接在代码中显式设置断点。这样，在异常发生时，就可以直接中断调试了。&lt;br>
+&lt;code>python&lt;/code>中的&lt;code>pdb&lt;/code>应该可以认为是一种阉割版的&lt;code>gdb&lt;/code>了。仅对&lt;code>list&lt;/code>&lt;code>print&lt;/code>及其他的&lt;code>python&lt;/code>的内置函数有较好的支持。相互配合来看的话，也能发现很多问题。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># 输出如下：
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;gt; test_debug.py(11)test_function()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-&amp;gt; return
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(Pdb) list
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 6 a = 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 7 b = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 8 c = a / b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 9 except Exception, e:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 10 pdb.set_trace()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11 -&amp;gt; return
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 12
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 13 if __name__ == &amp;#34;__main__&amp;#34;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 test_function()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[EOF]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(Pdb) print(e)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">integer division or modulo by zero
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(Pdb) print(a, b, c)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*** NameError: name &amp;#39;c&amp;#39; is not defined
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(Pdb) print(a, b)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(1, 0)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(Pdb) quit()
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>唔，先这样吧。可以考虑收集一些&lt;code>python&lt;/code>的内置解析包来配合调试了。&lt;/p></description></item></channel></rss>

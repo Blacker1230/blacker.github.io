@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Bpftrace on 李岩</title><link>https://liyan-ah.github.io/tags/bpftrace/</link><description>Recent content in Bpftrace on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Sat, 18 Nov 2023 15:36:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/bpftrace/index.xml" rel="self" type="application/rss+xml"/><item><title>bpftrace 遍历 golang 链表（go17+）</title><link>https://liyan-ah.github.io/p/bpftrace-%E9%81%8D%E5%8E%86-golang-%E9%93%BE%E8%A1%A8go17-/</link><pubDate>Sat, 18 Nov 2023 15:36:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/bpftrace-%E9%81%8D%E5%8E%86-golang-%E9%93%BE%E8%A1%A8go17-/</guid><description>&lt;blockquote>
+&lt;p>不出意外的，之前提到的 ELF 文件解析内容又拖延了。目前还不知道什么时候有时间能够把希望完成的几篇文章给搞完。翻一翻目前的博客，已经有很久没有更新了。那就水一篇文章吧。目前算是项目里的低谷期，希望能够重拾程序员的意义。&lt;/p>
+&lt;/blockquote>
+&lt;p>在&lt;a class="link" href="https://liyan-ah.github.io/2022/07/22/cljb83dlm000ckcs6bp7thrf9/#more" target="_blank" rel="noopener"
+>bpftrace 无侵入遍历golang链表&lt;/a>里，笔者展示了使用&lt;code>bpftrace&lt;/code>来遍历&lt;code>golang&lt;/code>链表的方法。由于&lt;code>go-17&lt;/code>和&lt;code>go-16&lt;/code>的函数调用规约存在不同，因此&lt;a class="link" href="https://liyan-ah.github.io/2022/07/22/cljb83dlm000ckcs6bp7thrf9/#more" target="_blank" rel="noopener"
+>bpftrace 无侵入遍历golang链表&lt;/a>并不适用于&lt;code>go-17&lt;/code>。其实这个问题在&lt;a class="link" href="https://liyan-ah.github.io/2023/03/03/cljb83dm2001mkcs68hgf9o2s/#more" target="_blank" rel="noopener"
+>go-1.17+ 调用规约&lt;/a>已经提到了解决方案。本文给一个实例，算是更进一步的延伸这个话题，希望能够起到一些效果。&lt;/p>
+&lt;h1 id="一执行效果">
+&lt;a href="#%e4%b8%80%e6%89%a7%e8%a1%8c%e6%95%88%e6%9e%9c">#&lt;/a>
+一、执行效果
+&lt;/h1>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">$ sudo bpftrace ./link.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Attaching 1 probe... // 在触发目标程序前，停止在这里
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// 触发目标程序后，输出
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">== enter main.showNode
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Alice, age: 11
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Bob, age: 12
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Claire, age: 13
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">== end
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// 目标程序执行结果
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ./link
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Alice, age: 11
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Bob, age: 12
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Claire, age: 13
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>需要注意的是，笔者的验证环境为：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">Linux 4.18.0-193.el8.x86_64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">go version go1.17 linux/amd64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bpftrace v0.14.0-72-g6761-dirty
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>由于不同的&lt;code>CPU&lt;/code>架构下，寄存器的信息会有所不同。本文中所涉及的代码示例仅在&lt;code>amd64&lt;/code>里有效。&lt;/p>
+&lt;h1 id="二代码">
+&lt;a href="#%e4%ba%8c%e4%bb%a3%e7%a0%81">#&lt;/a>
+二、代码
+&lt;/h1>&lt;p>本文涉及两部分代码：目标的&lt;code>go&lt;/code>代码以及&lt;code>bpftrace&lt;/code>代码。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="n">link&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">go&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">package&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="s2">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="ne">Node&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Name&lt;/span> &lt;span class="n">string&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Age&lt;/span> &lt;span class="n">int64&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Next&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="ne">Node&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">noinline&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">showNode&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">head&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="ne">Node&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">cur&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">head&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="n">cur&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">fmt&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;name: &lt;/span>&lt;span class="si">%s&lt;/span>&lt;span class="s2">, age: &lt;/span>&lt;span class="si">%d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, cur.Name, cur.Age)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cur&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">cur&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Next&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">node&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="ne">Node&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Name&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;Alice&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Age&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">11&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Next&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="ne">Node&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Name&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;Bob&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Age&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">12&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Next&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="ne">Node&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Name&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;Claire&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Age&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">13&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Next&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">nil&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">},&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">},&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">showNode&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">node&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>bpftrace&lt;/code>代码为：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">// link/link.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// 这里，符号使用双引号包裹起来是个好习惯
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">uprobe:./link:&amp;#34;main.showNode&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;== enter main.showNode
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $head_ptr = reg(&amp;#34;ax&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> unroll(10){
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $name_ptr = *(uint64*)($head_ptr+0);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $name_len = *(uint64*)($head_ptr+8);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $age_v = *(int64*)($head_ptr+16);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;name: %s, age: %d
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;, str($name_ptr, $name_len), $age_v);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // set head = next
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $head_ptr = *(uint64*)($head_ptr+24);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if ($head_ptr == 0){
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;== end
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>以上。周末愉快。&lt;/p></description></item></channel></rss>

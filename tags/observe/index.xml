@@ -1,0 +1,803 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Observe on 李岩</title><link>https://liyan-ah.github.io/tags/observe/</link><description>Recent content in Observe on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Fri, 08 Dec 2023 19:43:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/observe/index.xml" rel="self" type="application/rss+xml"/><item><title>如何追踪golang channel?</title><link>https://liyan-ah.github.io/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/</link><pubDate>Fri, 08 Dec 2023 19:43:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/</guid><description>&lt;blockquote>
+&lt;p>2023年就要结束了，算起来距离上一次更新也有很久了。搜肠刮肚，总得在23年结束前再搞两篇总结，算是有始有终。总结今年，总还是绕不过 BPF，golang。既然如此，就对BPF观测golang这个话题再往下挖掘下，先做第一篇文章。下旬如果有时间并且顺利的话，希望能把BPF的原理总结完成。&lt;/p>
+&lt;/blockquote>
+&lt;p>在&lt;a class="link" href="https://liyan-ah.github.io/2023/03/29/cljb83dmh003dkcs61joe1kfh/#more" target="_blank" rel="noopener"
+>无侵入观测服务拓扑四元组的一种实现&lt;/a>中，笔者有提到追踪&lt;code>golang&lt;/code>处理过程的两个无法解决的问题是&lt;code>golang&lt;/code>里的&lt;code>channel&lt;/code>处理以及&lt;code>goroutine pool&lt;/code>。再深究下，这两个问题实际上都可以归纳到对&lt;code>channel&lt;/code>的处理，因为很多&lt;code>goroutine pool&lt;/code>都离不了&lt;code>channel&lt;/code>的使用，比如&lt;a class="link" href="https://github.com/Jeffail/tunny" target="_blank" rel="noopener"
+>Jeffail/tunny&lt;/a>这个库。&lt;br>
+本文将会构建一个&lt;code>channel&lt;/code>的追踪的方案。&lt;/p>
+&lt;h1 id="一追踪效果">
+&lt;a href="#%e4%b8%80%e8%bf%bd%e8%b8%aa%e6%95%88%e6%9e%9c">#&lt;/a>
+一、追踪效果
+&lt;/h1>&lt;p>按照惯例，我们还是来看下效果。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">// terminal 1，启动服务
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ./drink-srv
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// terminal 2，启动追踪脚本
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo bpftrace ./drink.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Attaching 7 probes... // 启动后停止在这里
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">serve HTTP: /alcohol // 触发接口后输出
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">caller: /alcohol, callee: :/unknown/prepare/hotel
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">serve HTTP: /tea
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">caller: /tea, callee: :/unknown/prepare/club
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// terminal 3，触发服务接口
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ curl &amp;#34;localhost:1423/alcohol?age=22&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ curl &amp;#34;localhost:1423/tea?age=12&amp;#34;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="二方案设计">
+&lt;a href="#%e4%ba%8c%e6%96%b9%e6%a1%88%e8%ae%be%e8%ae%a1">#&lt;/a>
+二、方案设计
+&lt;/h1>&lt;p>关于&lt;code>golang channel&lt;/code>的实现及设计，可以参见&lt;a class="link" href="https://i6448038.github.io/2019/04/11/go-channel/" target="_blank" rel="noopener"
+>图解Go的channel底层实现&lt;/a>，里面有非常生动的动图实现；搭配源码食用更好&lt;a class="link" href="https://github.com/golang/go/blob/master/src/runtime/chan.go" target="_blank" rel="noopener"
+>runtime/chan.go&lt;/a>。&lt;br>
+笔者在这里再简单的总结下，对&lt;code>send&lt;/code>及&lt;code>recv&lt;/code>两种操作设计的状态做一个简单的概述：
+&lt;code>chan-send&lt;/code>的状态：
+&lt;img src="https://liyan-ah.github.io/chan-send.png"
+loading="lazy"
+alt="overwrote existing file"
+>
+&lt;code>chan-recv&lt;/code>的状态：
+&lt;img src="https://liyan-ah.github.io/chan-recv.png"
+loading="lazy"
+alt="overwrote existing file"
+>&lt;/p>
+&lt;p>比如，对于下面的代码，派生出的&lt;code>g1&lt;/code>在开启&lt;code>select&lt;/code>后，由于&lt;code>ticketChan&lt;/code>是空的，会触发&lt;code>g1&lt;/code>让出&lt;code>m&lt;/code>里的执行权限，进入&lt;code>gopark&lt;/code>状态。同时，&lt;code>ticketChan&lt;/code>会将&lt;code>g1&lt;/code>封装成&lt;code>sudog&lt;/code>，放到&lt;code>recvq&lt;/code>队列中。当一段时间之后，其他的&lt;code>g&lt;/code>将数据写入&lt;code>channel&lt;/code>里时，会在&lt;code>chansend&lt;/code>时，检查到&lt;code>recvq&lt;/code>不为空，会直接将数据拷贝到空闲的&lt;code>sudog&lt;/code>中。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="k">var&lt;/span> &lt;span class="n">ticketChan&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">make&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">10&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">HandleDrink&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">select&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">case&lt;/span> &lt;span class="n">info&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ok&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="o">&amp;lt;-&lt;/span>&lt;span class="n">ticketChan&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">go&lt;/span> &lt;span class="n">HandleDrink&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>chanrecv&lt;/code>进入&lt;code>recvq&lt;/code>对应的&lt;code>golang&lt;/code>处理逻辑在这里：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">// runtime/chan.go
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // no sender available: block on this channel.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> gp := getg()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg := acquireSudog()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.releasetime = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if t0 != 0 {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.releasetime = -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // No stack splits between assigning elem and enqueuing mysg
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // on gp.waiting where copystack can find it.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.elem = ep
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.waitlink = nil
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> gp.waiting = mysg
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.g = gp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.isSelect = false
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mysg.c = c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> gp.param = nil
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> c.recvq.enqueue(mysg)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>chansend&lt;/code>直接将数据拷贝到&lt;code>recvq&lt;/code>对应的&lt;code>golang&lt;/code>处理逻辑在这里：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">// runtime/chan.go
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if sg := c.recvq.dequeue(); sg != nil {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // Found a waiting receiver. We pass the value we want to send
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // directly to the receiver, bypassing the channel buffer (if any).
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> send(c, sg, ep, func() { unlock(&amp;amp;c.lock) }, 3)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return true
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="三方案实现">
+&lt;a href="#%e4%b8%89%e6%96%b9%e6%a1%88%e5%ae%9e%e7%8e%b0">#&lt;/a>
+三、方案实现
+&lt;/h1>&lt;p>了解了&lt;code>channel&lt;/code>的处理流程，追踪的方案就比较明确了，直接在关键的函数处设置&lt;code>hook&lt;/code>点即可。先来看下目标服务：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt"> 10
+&lt;/span>&lt;span class="lnt"> 11
+&lt;/span>&lt;span class="lnt"> 12
+&lt;/span>&lt;span class="lnt"> 13
+&lt;/span>&lt;span class="lnt"> 14
+&lt;/span>&lt;span class="lnt"> 15
+&lt;/span>&lt;span class="lnt"> 16
+&lt;/span>&lt;span class="lnt"> 17
+&lt;/span>&lt;span class="lnt"> 18
+&lt;/span>&lt;span class="lnt"> 19
+&lt;/span>&lt;span class="lnt"> 20
+&lt;/span>&lt;span class="lnt"> 21
+&lt;/span>&lt;span class="lnt"> 22
+&lt;/span>&lt;span class="lnt"> 23
+&lt;/span>&lt;span class="lnt"> 24
+&lt;/span>&lt;span class="lnt"> 25
+&lt;/span>&lt;span class="lnt"> 26
+&lt;/span>&lt;span class="lnt"> 27
+&lt;/span>&lt;span class="lnt"> 28
+&lt;/span>&lt;span class="lnt"> 29
+&lt;/span>&lt;span class="lnt"> 30
+&lt;/span>&lt;span class="lnt"> 31
+&lt;/span>&lt;span class="lnt"> 32
+&lt;/span>&lt;span class="lnt"> 33
+&lt;/span>&lt;span class="lnt"> 34
+&lt;/span>&lt;span class="lnt"> 35
+&lt;/span>&lt;span class="lnt"> 36
+&lt;/span>&lt;span class="lnt"> 37
+&lt;/span>&lt;span class="lnt"> 38
+&lt;/span>&lt;span class="lnt"> 39
+&lt;/span>&lt;span class="lnt"> 40
+&lt;/span>&lt;span class="lnt"> 41
+&lt;/span>&lt;span class="lnt"> 42
+&lt;/span>&lt;span class="lnt"> 43
+&lt;/span>&lt;span class="lnt"> 44
+&lt;/span>&lt;span class="lnt"> 45
+&lt;/span>&lt;span class="lnt"> 46
+&lt;/span>&lt;span class="lnt"> 47
+&lt;/span>&lt;span class="lnt"> 48
+&lt;/span>&lt;span class="lnt"> 49
+&lt;/span>&lt;span class="lnt"> 50
+&lt;/span>&lt;span class="lnt"> 51
+&lt;/span>&lt;span class="lnt"> 52
+&lt;/span>&lt;span class="lnt"> 53
+&lt;/span>&lt;span class="lnt"> 54
+&lt;/span>&lt;span class="lnt"> 55
+&lt;/span>&lt;span class="lnt"> 56
+&lt;/span>&lt;span class="lnt"> 57
+&lt;/span>&lt;span class="lnt"> 58
+&lt;/span>&lt;span class="lnt"> 59
+&lt;/span>&lt;span class="lnt"> 60
+&lt;/span>&lt;span class="lnt"> 61
+&lt;/span>&lt;span class="lnt"> 62
+&lt;/span>&lt;span class="lnt"> 63
+&lt;/span>&lt;span class="lnt"> 64
+&lt;/span>&lt;span class="lnt"> 65
+&lt;/span>&lt;span class="lnt"> 66
+&lt;/span>&lt;span class="lnt"> 67
+&lt;/span>&lt;span class="lnt"> 68
+&lt;/span>&lt;span class="lnt"> 69
+&lt;/span>&lt;span class="lnt"> 70
+&lt;/span>&lt;span class="lnt"> 71
+&lt;/span>&lt;span class="lnt"> 72
+&lt;/span>&lt;span class="lnt"> 73
+&lt;/span>&lt;span class="lnt"> 74
+&lt;/span>&lt;span class="lnt"> 75
+&lt;/span>&lt;span class="lnt"> 76
+&lt;/span>&lt;span class="lnt"> 77
+&lt;/span>&lt;span class="lnt"> 78
+&lt;/span>&lt;span class="lnt"> 79
+&lt;/span>&lt;span class="lnt"> 80
+&lt;/span>&lt;span class="lnt"> 81
+&lt;/span>&lt;span class="lnt"> 82
+&lt;/span>&lt;span class="lnt"> 83
+&lt;/span>&lt;span class="lnt"> 84
+&lt;/span>&lt;span class="lnt"> 85
+&lt;/span>&lt;span class="lnt"> 86
+&lt;/span>&lt;span class="lnt"> 87
+&lt;/span>&lt;span class="lnt"> 88
+&lt;/span>&lt;span class="lnt"> 89
+&lt;/span>&lt;span class="lnt"> 90
+&lt;/span>&lt;span class="lnt"> 91
+&lt;/span>&lt;span class="lnt"> 92
+&lt;/span>&lt;span class="lnt"> 93
+&lt;/span>&lt;span class="lnt"> 94
+&lt;/span>&lt;span class="lnt"> 95
+&lt;/span>&lt;span class="lnt"> 96
+&lt;/span>&lt;span class="lnt"> 97
+&lt;/span>&lt;span class="lnt"> 98
+&lt;/span>&lt;span class="lnt"> 99
+&lt;/span>&lt;span class="lnt">100
+&lt;/span>&lt;span class="lnt">101
+&lt;/span>&lt;span class="lnt">102
+&lt;/span>&lt;span class="lnt">103
+&lt;/span>&lt;span class="lnt">104
+&lt;/span>&lt;span class="lnt">105
+&lt;/span>&lt;span class="lnt">106
+&lt;/span>&lt;span class="lnt">107
+&lt;/span>&lt;span class="lnt">108
+&lt;/span>&lt;span class="lnt">109
+&lt;/span>&lt;span class="lnt">110
+&lt;/span>&lt;span class="lnt">111
+&lt;/span>&lt;span class="lnt">112
+&lt;/span>&lt;span class="lnt">113
+&lt;/span>&lt;span class="lnt">114
+&lt;/span>&lt;span class="lnt">115
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="n">package&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;log&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;net/http&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;strconv&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;github.com/gin-gonic/gin&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">const&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ALCOHOL&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">iota&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1001&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">COCO&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">COFFEE&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">TEA&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="n">TicketInfo&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Age&lt;/span> &lt;span class="ne">int&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Name&lt;/span> &lt;span class="n">string&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Type&lt;/span> &lt;span class="ne">int&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">var&lt;/span> &lt;span class="n">ticketChan&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">make&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">10&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">AlcoholH&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Context&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">ticket&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">{}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="n">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Age&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">strconv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Atoi&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Query&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;age&amp;#34;&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">String&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">StatusOK&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;handle failed&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Query&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;name&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Type&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">ALCOHOL&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticketChan&lt;/span> &lt;span class="o">&amp;lt;-&lt;/span> &lt;span class="n">ticket&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">TeaH&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Context&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">ticket&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">{}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="n">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Age&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">strconv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Atoi&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Query&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;age&amp;#34;&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;handle failed, &amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">err&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Error&lt;/span>&lt;span class="p">())&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">String&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">StatusOK&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;handle failed&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Query&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;name&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Type&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">TEA&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ticketChan&lt;/span> &lt;span class="o">&amp;lt;-&lt;/span> &lt;span class="n">ticket&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">String&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">StatusOK&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;okay&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">HandleDrink&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">select&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">case&lt;/span> &lt;span class="n">info&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ok&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="o">&amp;lt;-&lt;/span>&lt;span class="n">ticketChan&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="o">!&lt;/span>&lt;span class="n">ok&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;chan closed.&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;get ticket&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">switch&lt;/span> &lt;span class="n">info&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Type&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">case&lt;/span> &lt;span class="n">ALCOHOL&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Alcohol&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">info&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">case&lt;/span> &lt;span class="n">COCO&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">SoftDrink&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">info&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">case&lt;/span> &lt;span class="n">COFFEE&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">TEA&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Tea&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">info&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">default&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;unknown drink type&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">Alcohol&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ticket&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">url&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;http://localhost/unknown/prepare/hotel&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">DefaultClient&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Get&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">url&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">SoftDrink&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ticket&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;[&lt;/span>&lt;span class="si">%s&lt;/span>&lt;span class="s2">, &lt;/span>&lt;span class="si">%d&lt;/span>&lt;span class="s2">] drink &lt;/span>&lt;span class="si">%d&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Name&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Age&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ticket&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Type&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">Tea&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ticket&lt;/span> &lt;span class="n">TicketInfo&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">url&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;http://localhost/unknown/prepare/club&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">DefaultClient&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Get&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">url&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">defer&lt;/span> &lt;span class="k">func&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">close&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ticketChan&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">go&lt;/span> &lt;span class="n">HandleDrink&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">r&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Default&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GET&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/alcohol&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">AlcoholH&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GET&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/tea&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">TeaH&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">srv&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Server&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Addr&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;127.0.0.1:1423&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Handler&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">r&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">srv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ListenAndServe&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;failed to handle service listen&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>对于这样的一个服务，希望达到示例中的追踪效果，对应的方案为：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt"> 10
+&lt;/span>&lt;span class="lnt"> 11
+&lt;/span>&lt;span class="lnt"> 12
+&lt;/span>&lt;span class="lnt"> 13
+&lt;/span>&lt;span class="lnt"> 14
+&lt;/span>&lt;span class="lnt"> 15
+&lt;/span>&lt;span class="lnt"> 16
+&lt;/span>&lt;span class="lnt"> 17
+&lt;/span>&lt;span class="lnt"> 18
+&lt;/span>&lt;span class="lnt"> 19
+&lt;/span>&lt;span class="lnt"> 20
+&lt;/span>&lt;span class="lnt"> 21
+&lt;/span>&lt;span class="lnt"> 22
+&lt;/span>&lt;span class="lnt"> 23
+&lt;/span>&lt;span class="lnt"> 24
+&lt;/span>&lt;span class="lnt"> 25
+&lt;/span>&lt;span class="lnt"> 26
+&lt;/span>&lt;span class="lnt"> 27
+&lt;/span>&lt;span class="lnt"> 28
+&lt;/span>&lt;span class="lnt"> 29
+&lt;/span>&lt;span class="lnt"> 30
+&lt;/span>&lt;span class="lnt"> 31
+&lt;/span>&lt;span class="lnt"> 32
+&lt;/span>&lt;span class="lnt"> 33
+&lt;/span>&lt;span class="lnt"> 34
+&lt;/span>&lt;span class="lnt"> 35
+&lt;/span>&lt;span class="lnt"> 36
+&lt;/span>&lt;span class="lnt"> 37
+&lt;/span>&lt;span class="lnt"> 38
+&lt;/span>&lt;span class="lnt"> 39
+&lt;/span>&lt;span class="lnt"> 40
+&lt;/span>&lt;span class="lnt"> 41
+&lt;/span>&lt;span class="lnt"> 42
+&lt;/span>&lt;span class="lnt"> 43
+&lt;/span>&lt;span class="lnt"> 44
+&lt;/span>&lt;span class="lnt"> 45
+&lt;/span>&lt;span class="lnt"> 46
+&lt;/span>&lt;span class="lnt"> 47
+&lt;/span>&lt;span class="lnt"> 48
+&lt;/span>&lt;span class="lnt"> 49
+&lt;/span>&lt;span class="lnt"> 50
+&lt;/span>&lt;span class="lnt"> 51
+&lt;/span>&lt;span class="lnt"> 52
+&lt;/span>&lt;span class="lnt"> 53
+&lt;/span>&lt;span class="lnt"> 54
+&lt;/span>&lt;span class="lnt"> 55
+&lt;/span>&lt;span class="lnt"> 56
+&lt;/span>&lt;span class="lnt"> 57
+&lt;/span>&lt;span class="lnt"> 58
+&lt;/span>&lt;span class="lnt"> 59
+&lt;/span>&lt;span class="lnt"> 60
+&lt;/span>&lt;span class="lnt"> 61
+&lt;/span>&lt;span class="lnt"> 62
+&lt;/span>&lt;span class="lnt"> 63
+&lt;/span>&lt;span class="lnt"> 64
+&lt;/span>&lt;span class="lnt"> 65
+&lt;/span>&lt;span class="lnt"> 66
+&lt;/span>&lt;span class="lnt"> 67
+&lt;/span>&lt;span class="lnt"> 68
+&lt;/span>&lt;span class="lnt"> 69
+&lt;/span>&lt;span class="lnt"> 70
+&lt;/span>&lt;span class="lnt"> 71
+&lt;/span>&lt;span class="lnt"> 72
+&lt;/span>&lt;span class="lnt"> 73
+&lt;/span>&lt;span class="lnt"> 74
+&lt;/span>&lt;span class="lnt"> 75
+&lt;/span>&lt;span class="lnt"> 76
+&lt;/span>&lt;span class="lnt"> 77
+&lt;/span>&lt;span class="lnt"> 78
+&lt;/span>&lt;span class="lnt"> 79
+&lt;/span>&lt;span class="lnt"> 80
+&lt;/span>&lt;span class="lnt"> 81
+&lt;/span>&lt;span class="lnt"> 82
+&lt;/span>&lt;span class="lnt"> 83
+&lt;/span>&lt;span class="lnt"> 84
+&lt;/span>&lt;span class="lnt"> 85
+&lt;/span>&lt;span class="lnt"> 86
+&lt;/span>&lt;span class="lnt"> 87
+&lt;/span>&lt;span class="lnt"> 88
+&lt;/span>&lt;span class="lnt"> 89
+&lt;/span>&lt;span class="lnt"> 90
+&lt;/span>&lt;span class="lnt"> 91
+&lt;/span>&lt;span class="lnt"> 92
+&lt;/span>&lt;span class="lnt"> 93
+&lt;/span>&lt;span class="lnt"> 94
+&lt;/span>&lt;span class="lnt"> 95
+&lt;/span>&lt;span class="lnt"> 96
+&lt;/span>&lt;span class="lnt"> 97
+&lt;/span>&lt;span class="lnt"> 98
+&lt;/span>&lt;span class="lnt"> 99
+&lt;/span>&lt;span class="lnt">100
+&lt;/span>&lt;span class="lnt">101
+&lt;/span>&lt;span class="lnt">102
+&lt;/span>&lt;span class="lnt">103
+&lt;/span>&lt;span class="lnt">104
+&lt;/span>&lt;span class="lnt">105
+&lt;/span>&lt;span class="lnt">106
+&lt;/span>&lt;span class="lnt">107
+&lt;/span>&lt;span class="lnt">108
+&lt;/span>&lt;span class="lnt">109
+&lt;/span>&lt;span class="lnt">110
+&lt;/span>&lt;span class="lnt">111
+&lt;/span>&lt;span class="lnt">112
+&lt;/span>&lt;span class="lnt">113
+&lt;/span>&lt;span class="lnt">114
+&lt;/span>&lt;span class="lnt">115
+&lt;/span>&lt;span class="lnt">116
+&lt;/span>&lt;span class="lnt">117
+&lt;/span>&lt;span class="lnt">118
+&lt;/span>&lt;span class="lnt">119
+&lt;/span>&lt;span class="lnt">120
+&lt;/span>&lt;span class="lnt">121
+&lt;/span>&lt;span class="lnt">122
+&lt;/span>&lt;span class="lnt">123
+&lt;/span>&lt;span class="lnt">124
+&lt;/span>&lt;span class="lnt">125
+&lt;/span>&lt;span class="lnt">126
+&lt;/span>&lt;span class="lnt">127
+&lt;/span>&lt;span class="lnt">128
+&lt;/span>&lt;span class="lnt">129
+&lt;/span>&lt;span class="lnt">130
+&lt;/span>&lt;span class="lnt">131
+&lt;/span>&lt;span class="lnt">132
+&lt;/span>&lt;span class="lnt">133
+&lt;/span>&lt;span class="lnt">134
+&lt;/span>&lt;span class="lnt">135
+&lt;/span>&lt;span class="lnt">136
+&lt;/span>&lt;span class="lnt">137
+&lt;/span>&lt;span class="lnt">138
+&lt;/span>&lt;span class="lnt">139
+&lt;/span>&lt;span class="lnt">140
+&lt;/span>&lt;span class="lnt">141
+&lt;/span>&lt;span class="lnt">142
+&lt;/span>&lt;span class="lnt">143
+&lt;/span>&lt;span class="lnt">144
+&lt;/span>&lt;span class="lnt">145
+&lt;/span>&lt;span class="lnt">146
+&lt;/span>&lt;span class="lnt">147
+&lt;/span>&lt;span class="lnt">148
+&lt;/span>&lt;span class="lnt">149
+&lt;/span>&lt;span class="lnt">150
+&lt;/span>&lt;span class="lnt">151
+&lt;/span>&lt;span class="lnt">152
+&lt;/span>&lt;span class="lnt">153
+&lt;/span>&lt;span class="lnt">154
+&lt;/span>&lt;span class="lnt">155
+&lt;/span>&lt;span class="lnt">156
+&lt;/span>&lt;span class="lnt">157
+&lt;/span>&lt;span class="lnt">158
+&lt;/span>&lt;span class="lnt">159
+&lt;/span>&lt;span class="lnt">160
+&lt;/span>&lt;span class="lnt">161
+&lt;/span>&lt;span class="lnt">162
+&lt;/span>&lt;span class="lnt">163
+&lt;/span>&lt;span class="lnt">164
+&lt;/span>&lt;span class="lnt">165
+&lt;/span>&lt;span class="lnt">166
+&lt;/span>&lt;span class="lnt">167
+&lt;/span>&lt;span class="lnt">168
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define OFF_TASK_THRD 4992&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define OFF_THRD_FSBASE 40&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define GOID_OFFSET 152&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;runtime.runqput&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;runqput&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="err">@&lt;/span>&lt;span class="n">new_go&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">tid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">p_goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">new_go&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">tid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;bx&amp;#34;&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">p_goid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">p_goid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;runtime.newproc1&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;newproc1&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;bx&amp;#34;&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">new_go&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">tid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">这里，将&lt;/span> &lt;span class="n">caller&lt;/span> &lt;span class="err">信息和写入&lt;/span> &lt;span class="n">channel&lt;/span> &lt;span class="err">信息的&lt;/span> &lt;span class="n">key&lt;/span> &lt;span class="err">关联起来&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;runtime.chansend&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;chansend&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">curtask&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_TASK_THRD&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_THRD_FSBASE&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">如果当前执行&lt;/span>&lt;span class="n">goroutine中没有caller&lt;/span>&lt;span class="err">，跳过&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;ax&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint32&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">buf&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">send_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">send_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;runtime.chanrecv&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;chanrecv&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">curtask&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_TASK_THRD&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_THRD_FSBASE&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;ax&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint32&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">buf&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="err">@&lt;/span>&lt;span class="n">send_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">send_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">send_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;runtime.send&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;send&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;ax&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">sg&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;bx&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">sg&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint32&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">send_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">send_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">chan&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">qcount&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/*&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="n">serverHandler&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srv&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">Server&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">sh&lt;/span> &lt;span class="n">serverHandler&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="n">ServeHTTP&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">rw&lt;/span> &lt;span class="n">ResponseWriter&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">req&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">Request&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">*/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;net/http.serverHandler.ServeHTTP&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;ServeHTTP&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">curtask&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_TASK_THRD&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_THRD_FSBASE&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">req_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;di&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">offset&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">Request&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">URL&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">16&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">url_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">offset&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">URL&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Path&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">56&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">path_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">url_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">path_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">url_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">path_addr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">path_len&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;serve HTTP: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($path_addr, $path_len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/*&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">Client&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="k">do&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">req&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">Request&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">retres&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">Response&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">reterr&lt;/span> &lt;span class="n">error&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">*/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">drink&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">srv&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;net/http.(*Client).do&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;do&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">prob&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">prob_mark&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">curtask&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cur&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_TASK_THRD&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">OFF_THRD_FSBASE&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">fsbase&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">g&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="n">GOID_OFFSET&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">%d&lt;/span>&lt;span class="s2">: has no caller.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, $goid);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">req_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">reg&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;bx&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">offset&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">Request&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">URL&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">16&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">url_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">offset&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">URL&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Host&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">40&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">host_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">40&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">host_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">48&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">offset&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">URL&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Path&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">56&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">path_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">url_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">path_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">url_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">c_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_addr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">c_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">goid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;caller: &lt;/span>&lt;span class="si">%s&lt;/span>&lt;span class="s2">, callee: &lt;/span>&lt;span class="si">%s&lt;/span>&lt;span class="s2">:&lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($c_addr, $c_len),&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">str&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">host_addr&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">host_len&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nb">str&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">path_addr&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">path_len&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="四追踪的风险">
+&lt;a href="#%e5%9b%9b%e8%bf%bd%e8%b8%aa%e7%9a%84%e9%a3%8e%e9%99%a9">#&lt;/a>
+四、追踪的风险
+&lt;/h1>&lt;p>至此，看起来&lt;code>golang channel&lt;/code>是可以追踪的。但是实际上并非如此。比如如下这个示例：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">HandleDrink&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">select&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">case&lt;/span> &lt;span class="n">info&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">ok&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="o">&amp;lt;-&lt;/span>&lt;span class="n">ticketChan&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">default&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="err">注意这个&lt;/span> &lt;span class="n">stop&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">no&lt;/span> &lt;span class="n">stop&lt;/span> &lt;span class="n">here&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这段逻辑在代码编写、编译阶段均无问题，是一段完全合理的逻辑。当我们试图追踪这段代码时：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">$ sudo bpftrace ./drink.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Attaching 7 probes...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">^C // 直接停止，没有请求
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">@prob[chanrecv]: 908571
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>注意，此时并没有做任何的操作，但是这个&lt;code>chanrecv&lt;/code>这个&lt;code>hook&lt;/code>点已经触发了数十万次。而我们知道，&lt;code>BPF hook&lt;/code>点的触发并非没有开销的。因此，目标的代码在完全合理的情况下，我们的追踪程序会给系统带来很大的负载。这显然是我们需要避免的。&lt;/p>
+&lt;p>以上，周末愉快～&lt;/p></description></item></channel></rss>

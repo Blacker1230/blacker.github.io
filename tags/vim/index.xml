@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Vim on 李岩</title><link>https://liyan-ah.github.io/tags/vim/</link><description>Recent content in Vim on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Wed, 23 Dec 2020 19:23:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/vim/index.xml" rel="self" type="application/rss+xml"/><item><title>elscreen标签背景颜色</title><link>https://liyan-ah.github.io/p/elscreen%E6%A0%87%E7%AD%BE%E8%83%8C%E6%99%AF%E9%A2%9C%E8%89%B2/</link><pubDate>Wed, 23 Dec 2020 19:23:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/elscreen%E6%A0%87%E7%AD%BE%E8%83%8C%E6%99%AF%E9%A2%9C%E8%89%B2/</guid><description>&lt;blockquote>
+&lt;p>使用&lt;code>emacs&lt;/code>过程中，配合&lt;code>evil&lt;/code>使用，按照&lt;code>tab&lt;/code>的划分，将编辑、浏览、&lt;code>leetcode&lt;/code>等任务划分到不同的&lt;code>tab&lt;/code>便于切换及管理。美中不足的是，模拟标签的&lt;code>elscreen&lt;/code>默认将其他标签的颜色设置成&lt;code>:background blue :foreground black&lt;/code>的配色，每次切换任务时，都需要重复确认需要跳转到哪个标签，就比较麻烦了。查找了一下重置&lt;code>face-attribute&lt;/code>的方法，备注下。&lt;/p>
+&lt;/blockquote>
+&lt;p>在初始文件的最后添加：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;; 选中标签设置为绿底黑字，其他标签为黄底黑字
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(set-face-attribute &amp;#39;elscreen-tab-other-screen-face nil
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> :background &amp;#34;yellow&amp;#34; :foreground &amp;#34;black&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(set-face-attribute &amp;#39;elscreen-tab-current-screen-face nil
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> :background &amp;#34;green&amp;#34; :foreground &amp;#34;black&amp;#34;)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;!-- more -->
+&lt;p>备注下&lt;a class="link" href="https://github.com/knu/elscreen" target="_blank" rel="noopener"
+>&lt;code>elscreen&lt;/code>&lt;/a>原始代码：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">(defface elscreen-tab-current-screen-face
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#39;((((class color))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (:background &amp;#34;white&amp;#34; :foreground &amp;#34;black&amp;#34;))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (t (:underline t)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;Face for current screen tab.&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> :group &amp;#39;elscreen)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(defface elscreen-tab-other-screen-face
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#39;((((type x w32 mac ns) (class color))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> :background &amp;#34;Gray85&amp;#34; :foreground &amp;#34;Gray50&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (((class color))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (:background &amp;#34;blue&amp;#34; :foreground &amp;#34;black&amp;#34; :underline t)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;Face for tabs other than current screen one.&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> :group &amp;#39;elscreen)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;a class="link" href="https://www.gnu.org/software/emacs/manual/html_node/elisp/Defining-Faces.html" target="_blank" rel="noopener"
+>emacs defface&lt;/a>&lt;/p></description></item></channel></rss>

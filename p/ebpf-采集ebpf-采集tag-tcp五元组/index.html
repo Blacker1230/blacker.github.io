@@ -1,0 +1,293 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 在这里对文章题目作一些说明。笔者想了很长时间也无法给这篇文章想个恰当的表意题目。实际上使用ebpf来进行服务观测是有在进行的，比如获取目前l1s上的常见的四元组。但是本文不是介绍这部分可观测实践的。文章希望阐述的场景是：采集请求触发里的一些信息（诸如trace及其他header等）并和服务请求下游的传输层五元组(protocol, src-ip, src-port, dst-ip, dst-port)进行关联。这也是最近工作中实际遇到的问题。\n基于ebpf的丰富的特性能够获取服务很多的信息，不同特性的组合更是可以达到极强的数据整合能力。比如通过uprobe便捷的获取业务信息后，结合kprobe来获取系统调用里的内容，可以获取一般侵入式可观测代码无法获取的内容。笔者最近遇到的一个实际问题是：获取服务A的接口/a响应后，向下游B发起的请求时，所使用的传输层五元组，同时带上结合一些/a触发时的一些内容，比如caller_fun或者traceId。\n这里值得说明的是，用户态请求的是一个域名。域名的解析是在golang的http里完成的。但是请注意，golang发起tcp请求时，local port设置的是0，然后由内核态的tpc处理来选择一个空闲的port作为socket里的lport。这部分的信息通过代码的埋点显然是无法获取的（详情可参考TCP连接中客户端的端口号是如何确定的？）。\n下面介绍下实现效果及思路。\n关于bpftrace使用的介绍，可以参见：bpftrace 无侵入遍历golang链表，关于ebpf来进行数据采集的实践，可以参见ebpf采集mysql请求信息及ebpf对应用安全的思考。\n"><title>ebpf 采集ebpf 采集tag+tcp五元组</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="ebpf 采集ebpf 采集tag+tcp五元组"><meta property='og:description' content=" 在这里对文章题目作一些说明。笔者想了很长时间也无法给这篇文章想个恰当的表意题目。实际上使用ebpf来进行服务观测是有在进行的，比如获取目前l1s上的常见的四元组。但是本文不是介绍这部分可观测实践的。文章希望阐述的场景是：采集请求触发里的一些信息（诸如trace及其他header等）并和服务请求下游的传输层五元组(protocol, src-ip, src-port, dst-ip, dst-port)进行关联。这也是最近工作中实际遇到的问题。\n基于ebpf的丰富的特性能够获取服务很多的信息，不同特性的组合更是可以达到极强的数据整合能力。比如通过uprobe便捷的获取业务信息后，结合kprobe来获取系统调用里的内容，可以获取一般侵入式可观测代码无法获取的内容。笔者最近遇到的一个实际问题是：获取服务A的接口/a响应后，向下游B发起的请求时，所使用的传输层五元组，同时带上结合一些/a触发时的一些内容，比如caller_fun或者traceId。\n这里值得说明的是，用户态请求的是一个域名。域名的解析是在golang的http里完成的。但是请注意，golang发起tcp请求时，local port设置的是0，然后由内核态的tpc处理来选择一个空闲的port作为socket里的lport。这部分的信息通过代码的埋点显然是无法获取的（详情可参考TCP连接中客户端的端口号是如何确定的？）。\n下面介绍下实现效果及思路。\n关于bpftrace使用的介绍，可以参见：bpftrace 无侵入遍历golang链表，关于ebpf来进行数据采集的实践，可以参见ebpf采集mysql请求信息及ebpf对应用安全的思考。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='bpf'><meta property='article:tag' content='tcp'><meta property='article:published_time' content='2023-02-24T21:44:49+00:00'><meta property='article:modified_time' content='2023-02-24T21:44:49+00:00'><meta name=twitter:title content="ebpf 采集ebpf 采集tag+tcp五元组"><meta name=twitter:description content=" 在这里对文章题目作一些说明。笔者想了很长时间也无法给这篇文章想个恰当的表意题目。实际上使用ebpf来进行服务观测是有在进行的，比如获取目前l1s上的常见的四元组。但是本文不是介绍这部分可观测实践的。文章希望阐述的场景是：采集请求触发里的一些信息（诸如trace及其他header等）并和服务请求下游的传输层五元组(protocol, src-ip, src-port, dst-ip, dst-port)进行关联。这也是最近工作中实际遇到的问题。\n基于ebpf的丰富的特性能够获取服务很多的信息，不同特性的组合更是可以达到极强的数据整合能力。比如通过uprobe便捷的获取业务信息后，结合kprobe来获取系统调用里的内容，可以获取一般侵入式可观测代码无法获取的内容。笔者最近遇到的一个实际问题是：获取服务A的接口/a响应后，向下游B发起的请求时，所使用的传输层五元组，同时带上结合一些/a触发时的一些内容，比如caller_fun或者traceId。\n这里值得说明的是，用户态请求的是一个域名。域名的解析是在golang的http里完成的。但是请注意，golang发起tcp请求时，local port设置的是0，然后由内核态的tpc处理来选择一个空闲的port作为socket里的lport。这部分的信息通过代码的埋点显然是无法获取的（详情可参考TCP连接中客户端的端口号是如何确定的？）。\n下面介绍下实现效果及思路。\n关于bpftrace使用的介绍，可以参见：bpftrace 无侵入遍历golang链表，关于ebpf来进行数据采集的实践，可以参见ebpf采集mysql请求信息及ebpf对应用安全的思考。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/>ebpf 采集ebpf 采集tag+tcp五元组</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Feb 24, 2023</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 3 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>在这里对文章题目作一些说明。笔者想了很长时间也无法给这篇文章想个恰当的表意题目。实际上使用<code>ebpf</code>来进行服务观测是有在进行的，比如获取目前<code>l1s</code>上的常见的四元组。但是本文不是介绍这部分可观测实践的。文章希望阐述的场景是：采集请求触发里的一些信息（诸如<code>trace</code>及其他<code>header</code>等）并和服务请求下游的传输层五元组(protocol, src-ip, src-port, dst-ip, dst-port)进行关联。这也是最近工作中实际遇到的问题。</p></blockquote><p>基于<code>ebpf</code>的丰富的特性能够获取服务很多的信息，不同特性的组合更是可以达到极强的数据整合能力。比如通过<code>uprobe</code>便捷的获取业务信息后，结合<code>kprobe</code>来获取系统调用里的内容，可以获取一般侵入式可观测代码无法获取的内容。笔者最近遇到的一个实际问题是：获取服务<code>A</code>的接口<code>/a</code>响应后，向下游<code>B</code>发起的请求时，所使用的传输层五元组，同时带上结合一些<code>/a</code>触发时的一些内容，比如<code>caller_fun</code>或者<code>traceId</code>。<br>这里值得说明的是，用户态请求的是一个域名。域名的解析是在<code>golang</code>的<code>http</code>里完成的。但是请注意，<code>golang</code>发起<code>tcp</code>请求时，<code>local port</code>设置的是<code>0</code>，然后由内核态的<code>tpc</code>处理来选择一个空闲的<code>port</code>作为<code>socket</code>里的<code>lport</code>。这部分的信息通过代码的埋点显然是无法获取的（详情可参考<a class=link href="https://mp.weixin.qq.com/s?__biz=MjM5Njg5NDgwNA==&amp;mid=2247485577&amp;idx=1&amp;sn=24220fcc3782f61b4a691585251f1c27&amp;chksm=a6e309b2919480a4696c8a2944ad887951100b5068050d354eab40cf0c8f1124b6367176a0a6&amp;scene=21#wechat_redirect" target=_blank rel=noopener>TCP连接中客户端的端口号是如何确定的？</a>）。<br>下面介绍下实现效果及思路。</p><blockquote><p>关于<code>bpftrace</code>使用的介绍，可以参见：<a class=link href=https://liyan-ah.github.io/2022/07/22/bpfTrace-%E8%BF%BD%E8%B8%AA-uprobe/#more target=_blank rel=noopener>bpftrace 无侵入遍历golang链表</a>，关于<code>ebpf</code>来进行数据采集的实践，可以参见<a class=link href=https://liyan-ah.github.io/2022/10/21/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/ target=_blank rel=noopener>ebpf采集mysql请求信息及ebpf对应用安全的思考</a>。</p></blockquote><h1 id=实现效果><a href=#%e5%ae%9e%e7%8e%b0%e6%95%88%e6%9e%9c>#</a>
+实现效果</h1><p>服务端启动、触发的效果：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=c1># 启动目标服务</span>
+</span></span><span class=line><span class=cl><span class=o>./</span><span class=n>caller_tuple</span>
+</span></span><span class=line><span class=cl><span class=p>[</span><span class=n>GIN</span><span class=o>-</span><span class=n>debug</span><span class=p>]</span> <span class=p>[</span><span class=n>WARNING</span><span class=p>]</span> <span class=n>Creating</span> <span class=n>an</span> <span class=n>Engine</span> <span class=n>instance</span> <span class=n>with</span> <span class=n>the</span> <span class=n>Logger</span> <span class=ow>and</span> <span class=n>Recovery</span> <span class=n>middleware</span> <span class=n>already</span> <span class=n>attached</span><span class=o>.</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[</span><span class=n>GIN</span><span class=o>-</span><span class=n>debug</span><span class=p>]</span> <span class=p>[</span><span class=n>WARNING</span><span class=p>]</span> <span class=n>Running</span> <span class=ow>in</span> <span class=s2>&#34;debug&#34;</span> <span class=n>mode</span><span class=o>.</span> <span class=n>Switch</span> <span class=n>to</span> <span class=s2>&#34;release&#34;</span> <span class=n>mode</span> <span class=ow>in</span> <span class=n>production</span><span class=o>.</span>
+</span></span><span class=line><span class=cl> <span class=o>-</span> <span class=n>using</span> <span class=n>env</span><span class=p>:</span>	<span class=k>export</span> <span class=n>GIN_MODE</span><span class=o>=</span><span class=n>release</span>
+</span></span><span class=line><span class=cl> <span class=o>-</span> <span class=n>using</span> <span class=n>code</span><span class=p>:</span>	<span class=n>gin</span><span class=o>.</span><span class=n>SetMode</span><span class=p>(</span><span class=n>gin</span><span class=o>.</span><span class=n>ReleaseMode</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[</span><span class=n>GIN</span><span class=o>-</span><span class=n>debug</span><span class=p>]</span> <span class=n>GET</span>    <span class=o>/</span><span class=n>echo</span>                     <span class=o>--&gt;</span> <span class=n>main</span><span class=o>.</span><span class=n>Echo</span> <span class=p>(</span><span class=mi>3</span> <span class=n>handlers</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=c1># 这里触发一次接口调用</span>
+</span></span><span class=line><span class=cl><span class=p>[</span><span class=n>GIN</span><span class=p>]</span> <span class=mi>2023</span><span class=o>/</span><span class=mi>02</span><span class=o>/</span><span class=mi>24</span> <span class=o>-</span> <span class=mi>22</span><span class=p>:</span><span class=mi>05</span><span class=p>:</span><span class=mi>29</span> <span class=o>|</span> <span class=mi>200</span> <span class=o>|</span>   <span class=mf>85.618975</span><span class=n>ms</span> <span class=o>|</span>       <span class=mf>127.0</span><span class=o>.</span><span class=mf>0.1</span> <span class=o>|</span> <span class=n>GET</span>      <span class=s2>&#34;/echo&#34;</span>
+</span></span></code></pre></td></tr></table></div></div><p><code>bpftrace</code> 采集端的效果：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl># 启动采集
+</span></span><span class=line><span class=cl>bpftrace ./caller.bt
+</span></span><span class=line><span class=cl>Attaching 3 probes...
+</span></span><span class=line><span class=cl>start to gather caller info.
+</span></span><span class=line><span class=cl>get caller path: /echo
+</span></span><span class=line><span class=cl># 将 caller_path 和 传输层五元组结合起来（本机的IP实际上是输出的，但是为了信息安全，就使用 0.0.0.0 来代替了）
+</span></span><span class=line><span class=cl>caller info: /echo
+</span></span><span class=line><span class=cl>3326691  caller_tuple     0.0.0.0                            38610  110.242.68.66                           80
+</span></span></code></pre></td></tr></table></div></div><h1 id=代码实现><a href=#%e4%bb%a3%e7%a0%81%e5%ae%9e%e7%8e%b0>#</a>
+代码实现</h1><p>这里分别上一下目标服务<code>caller_func</code>以及采集脚本<code>caller.bt</code>的代码，来说明下实现思路。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span><span class=lnt>105
+</span><span class=lnt>106
+</span><span class=lnt>107
+</span><span class=lnt>108
+</span><span class=lnt>109
+</span><span class=lnt>110
+</span><span class=lnt>111
+</span><span class=lnt>112
+</span><span class=lnt>113
+</span><span class=lnt>114
+</span><span class=lnt>115
+</span><span class=lnt>116
+</span><span class=lnt>117
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=o>./</span><span class=n>caller_tuple</span><span class=o>/</span><span class=n>main</span><span class=o>.</span><span class=n>go</span>
+</span></span><span class=line><span class=cl><span class=n>package</span> <span class=n>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;net/http&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;github.com/gin-gonic/gin&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>Resp</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>Errno</span> <span class=n>int64</span>  <span class=err>`</span><span class=n>json</span><span class=p>:</span><span class=s2>&#34;errno&#34;</span><span class=err>`</span>
+</span></span><span class=line><span class=cl>	<span class=n>Msg</span>   <span class=n>string</span> <span class=err>`</span><span class=n>json</span><span class=p>:</span><span class=s2>&#34;msg&#34;</span><span class=err>`</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>Echo</span><span class=p>(</span><span class=n>c</span> <span class=o>*</span><span class=n>gin</span><span class=o>.</span><span class=n>Context</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>req</span><span class=p>,</span> <span class=n>_</span> <span class=p>:</span><span class=o>=</span> <span class=n>http</span><span class=o>.</span><span class=n>NewRequest</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>MethodGet</span><span class=p>,</span> <span class=s2>&#34;http://baidu.com&#34;</span><span class=p>,</span> <span class=n>nil</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>client</span> <span class=p>:</span><span class=o>=</span> <span class=n>http</span><span class=o>.</span><span class=n>Client</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=n>resp</span><span class=p>,</span> <span class=n>err</span> <span class=p>:</span><span class=o>=</span> <span class=n>client</span><span class=o>.</span><span class=n>Do</span><span class=p>(</span><span class=n>req</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>c</span><span class=o>.</span><span class=n>JSON</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>StatusOK</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>Resp</span><span class=p>{</span><span class=n>Errno</span><span class=p>:</span> <span class=mi>1</span><span class=p>,</span> <span class=n>Msg</span><span class=p>:</span> <span class=s2>&#34;request error&#34;</span><span class=p>})</span>
+</span></span><span class=line><span class=cl>		<span class=k>return</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>defer</span> <span class=n>resp</span><span class=o>.</span><span class=n>Body</span><span class=o>.</span><span class=n>Close</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>c</span><span class=o>.</span><span class=n>JSON</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>StatusOK</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>Resp</span><span class=p>{</span><span class=n>Errno</span><span class=p>:</span> <span class=mi>0</span><span class=p>,</span> <span class=n>Msg</span><span class=p>:</span> <span class=s2>&#34;ok&#34;</span><span class=p>})</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>r</span> <span class=p>:</span><span class=o>=</span> <span class=n>gin</span><span class=o>.</span><span class=n>Default</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>srv</span> <span class=p>:</span><span class=o>=</span> <span class=o>&amp;</span><span class=n>http</span><span class=o>.</span><span class=n>Server</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>Addr</span><span class=p>:</span> <span class=s2>&#34;0.0.0.0:3344&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>r</span><span class=o>.</span><span class=n>GET</span><span class=p>(</span><span class=s2>&#34;/echo&#34;</span><span class=p>,</span> <span class=n>Echo</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>srv</span><span class=o>.</span><span class=n>Handler</span> <span class=o>=</span> <span class=n>r</span>
+</span></span><span class=line><span class=cl>	<span class=n>srv</span><span class=o>.</span><span class=n>ListenAndServe</span><span class=p>()</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=n>caller_tuple</span><span class=o>/</span><span class=n>caller</span><span class=o>.</span><span class=n>bt</span>
+</span></span><span class=line><span class=cl><span class=c1>#!/usr/bin/env bpftrace</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#define AF_INET 2</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=n>sock_common</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=n>union</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>                <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>                        <span class=n>__be32</span> <span class=n>skc_daddr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>                        <span class=n>__be32</span> <span class=n>skc_rcv_saddr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>                <span class=p>};</span>
+</span></span><span class=line><span class=cl>        <span class=p>};</span>
+</span></span><span class=line><span class=cl>        <span class=n>union</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>                <span class=n>unsigned</span> <span class=ne>int</span> <span class=n>skc_hash</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>                <span class=n>__u16</span> <span class=n>skc_u16hashes</span><span class=p>[</span><span class=mi>2</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>        <span class=p>};</span>
+</span></span><span class=line><span class=cl>        <span class=n>union</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>                <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>                        <span class=n>__be16</span> <span class=n>skc_dport</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>                        <span class=n>__u16</span> <span class=n>skc_num</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>                <span class=p>};</span>
+</span></span><span class=line><span class=cl>        <span class=p>};</span>
+</span></span><span class=line><span class=cl>        <span class=n>short</span> <span class=n>unsigned</span> <span class=ne>int</span> <span class=n>skc_family</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=n>sock</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=n>struct</span> <span class=n>sock_common</span> <span class=n>__sk_common</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>BEGIN</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;start to gather caller info.</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;);</span>
+</span></span><span class=line><span class=cl>    <span class=err>@</span><span class=n>caller</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span> <span class=o>=</span> <span class=s2>&#34;none&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=err>这里通过</span> <span class=n>uprobe</span> <span class=err>来便捷的获取会话信息。同时将信息写入</span><span class=n>bpf_map</span>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>caller_tuple</span><span class=p>:</span><span class=s2>&#34;net/http.serverHandler.ServeHTTP&#34;</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>req_ptr</span> <span class=o>=</span> <span class=n>sarg3</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>method_ptr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_ptr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>method_len</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_ptr</span><span class=o>+</span><span class=mi>8</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=o>/*</span> <span class=n>read</span> <span class=n>request</span><span class=o>.</span><span class=n>url</span><span class=o>.</span><span class=n>Path</span> <span class=o>*/</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>url_ptr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_ptr</span> <span class=o>+</span> <span class=mi>16</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>path_ptr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>url_ptr</span><span class=o>+</span><span class=mi>56</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>path_len</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>url_ptr</span><span class=o>+</span><span class=mi>64</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;get caller path: </span><span class=si>%s</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, str($path_ptr, $path_len));</span>
+</span></span><span class=line><span class=cl>    <span class=o>//</span> <span class=err>这里使用</span> <span class=n>pid</span> <span class=err>来作为</span> <span class=n>key</span> <span class=err>只是为了实现方便。实际可以采取其他更有区分性的内容。</span>
+</span></span><span class=line><span class=cl>    <span class=err>@</span><span class=n>caller_ptr</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span><span class=o>=$</span><span class=n>path_ptr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span><span class=o>=$</span><span class=n>path_len</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=err>通过</span> <span class=n>kprobe</span> <span class=err>来获取用户态无法获取的内容。同时通过</span> <span class=n>bpf_map</span> <span class=err>来控制生效及内容的交互。</span>
+</span></span><span class=line><span class=cl><span class=n>kprobe</span><span class=p>:</span><span class=n>tcp_connect</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>if</span> <span class=p>(</span><span class=err>@</span><span class=n>caller_ptr</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>        <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>ptr</span> <span class=o>=</span> <span class=err>@</span><span class=n>caller_ptr</span><span class=p>[</span><span class=n>pid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>len</span> <span class=o>=</span> <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=n>pid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>    <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;caller info: </span><span class=si>%s</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, str($ptr, $len));</span>
+</span></span><span class=line><span class=cl>    <span class=err>@</span><span class=n>caller_ptr</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>sk</span> <span class=o>=</span> <span class=p>((</span><span class=n>struct</span> <span class=n>sock</span> <span class=o>*</span><span class=p>)</span> <span class=n>arg0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>inet_family</span> <span class=o>=</span> <span class=o>$</span><span class=n>sk</span><span class=o>-&gt;</span><span class=n>__sk_common</span><span class=o>.</span><span class=n>skc_family</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=o>$</span><span class=n>inet_family</span> <span class=o>==</span> <span class=n>AF_INET</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>daddr</span> <span class=o>=</span> <span class=n>ntop</span><span class=p>(</span><span class=o>$</span><span class=n>sk</span><span class=o>-&gt;</span><span class=n>__sk_common</span><span class=o>.</span><span class=n>skc_daddr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>saddr</span> <span class=o>=</span> <span class=n>ntop</span><span class=p>(</span><span class=o>$</span><span class=n>sk</span><span class=o>-&gt;</span><span class=n>__sk_common</span><span class=o>.</span><span class=n>skc_rcv_saddr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>lport</span> <span class=o>=</span> <span class=o>$</span><span class=n>sk</span><span class=o>-&gt;</span><span class=n>__sk_common</span><span class=o>.</span><span class=n>skc_num</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>dport</span> <span class=o>=</span> <span class=o>$</span><span class=n>sk</span><span class=o>-&gt;</span><span class=n>__sk_common</span><span class=o>.</span><span class=n>skc_dport</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=o>$</span><span class=n>dport</span> <span class=o>=</span> <span class=p>((((</span><span class=o>$</span><span class=n>dport</span><span class=p>)</span> <span class=o>&gt;&gt;</span> <span class=mi>8</span><span class=p>)</span> <span class=o>&amp;</span> <span class=mh>0xff</span><span class=p>)</span> <span class=o>|</span> <span class=p>(((</span><span class=o>$</span><span class=n>dport</span><span class=p>)</span> <span class=o>&amp;</span> <span class=mh>0xff</span><span class=p>)</span> <span class=o>&lt;&lt;</span> <span class=mi>8</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;</span><span class=si>%-8d</span><span class=s2> </span><span class=si>%-16s</span><span class=s2> &#34;</span><span class=p>,</span> <span class=n>pid</span><span class=p>,</span> <span class=n>comm</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;</span><span class=si>%-39s</span><span class=s2> </span><span class=si>%-6d</span><span class=s2> </span><span class=si>%-39s</span><span class=s2> </span><span class=si>%-6d</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, $saddr, $lport, $daddr, $dport);</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>这样就达到了笔者的目标。这只是<code>ebpf</code>应用的一个简单的场景，更多的<code>metric</code>采集内容仍在进行。<br>以上，周末愉快！</p></section><footer class=article-footer><section class=article-tags><a href=/tags/bpf/>Bpf</a>
+<a href=/tags/tcp/>Tcp</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/><div class=article-details><h2 class=article-title>BPF 获取 LVS FullNat 模式下的 Client IP</h2></div></a></article><article><a href=/p/ebpf-tail-calls%E7%A4%BA%E4%BE%8B/><div class=article-details><h2 class=article-title>eBPF tail-calls示例</h2></div></a></article><article><a href=/p/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/><div class=article-details><h2 class=article-title>ebpf采集mysql请求信息及ebpf对应用安全的思考</h2></div></a></article><article><a href=/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/><div class=article-details><h2 class=article-title>bpftrace 无侵入遍历golang链表</h2></div></a></article><article><a href=/p/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/><div class=article-details><h2 class=article-title>golang 常见类型字节数</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

@@ -1,0 +1,245 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content="最近研究了一下pluma的使用。发现官网上的简单示例对于刚入门的人来说还是麻烦了些（而且还有语法错误）。\n下面重新整理了一个例子，作为备注。\n"><title>c++插件管理--pluma&lt;实践></title>
+<link rel=canonical href=https://liyan-ah.github.io/p/c-%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86--pluma%E5%AE%9E%E8%B7%B5/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="c++插件管理--pluma<实践>"><meta property='og:description' content="最近研究了一下pluma的使用。发现官网上的简单示例对于刚入门的人来说还是麻烦了些（而且还有语法错误）。\n下面重新整理了一个例子，作为备注。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/c-%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86--pluma%E5%AE%9E%E8%B7%B5/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='c++'><meta property='article:tag' content='pluma'><meta property='article:published_time' content='2020-10-29T21:19:00+00:00'><meta property='article:modified_time' content='2020-10-29T21:19:00+00:00'><meta name=twitter:title content="c++插件管理--pluma<实践>"><meta name=twitter:description content="最近研究了一下pluma的使用。发现官网上的简单示例对于刚入门的人来说还是麻烦了些（而且还有语法错误）。\n下面重新整理了一个例子，作为备注。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/code/ style=background-color:#2a9d8f;color:#fff>Code</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/c-%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86--pluma%E5%AE%9E%E8%B7%B5/>c++插件管理--pluma&lt;实践></a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Oct 29, 2020</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 2 分钟</time></div></footer></div></header><section class=article-content><p>最近研究了一下<a class=link href=http://pluma-framework.sourceforge.net/ target=_blank rel=noopener>pluma</a>的使用。发现官网上的简单示例对于刚入门的人来说还是麻烦了些（而且还有语法错误）。<br>下面重新整理了一个例子，作为备注。</p><p>其中，<code>device</code>为一个虚基类，作为接口类存在。<code>keyboard</code>及<code>screen</code>作为实现了device的子类存在，实现具体的操作。在pluma上注册后，在<code>main</code>中调用接口，实现<code>keyboard</code>及<code>screen</code>的调用。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=n>device</span><span class=o>.</span><span class=n>hpp</span>
+</span></span><span class=line><span class=cl><span class=c1>#ifndef _DEVICE_HPP_</span>
+</span></span><span class=line><span class=cl><span class=c1>#define _DEVICE_HPP_</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;Pluma/Pluma.hpp&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>class</span> <span class=n>Device</span><span class=p>{</span>
+</span></span><span class=line><span class=cl><span class=n>public</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>    <span class=n>virtual</span> <span class=n>std</span><span class=p>::</span><span class=n>string</span> <span class=n>getDescription</span><span class=p>()</span> <span class=k>const</span><span class=o>=</span><span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=n>create</span> <span class=n>DevicedProvider</span> <span class=k>class</span>
+</span></span><span class=line><span class=cl><span class=n>PLUMA_PROVIDER_HEADER</span><span class=p>(</span><span class=n>Device</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#endif</span>
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// device.cpp
+</span></span><span class=line><span class=cl>#include &#34;device.hpp&#34;
+</span></span><span class=line><span class=cl>PLUMA_PROVIDER_SOURCE(Device, 6, 3);
+</span></span></code></pre></td></tr></table></div></div><p>如上所示，是<code>device</code>的定义。其中<code>PLUMA_PROVIDER_HEADER</code>和<code>PLUMA_PROVIDER_SOURCE</code><code>pluma</code>提供的宏。功能暂且不论。我们继续往下看。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=n>screen</span><span class=o>.</span><span class=n>hpp</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;Pluma/Pluma.hpp&#34;</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;device.hpp&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>class</span> <span class=n>Screen</span><span class=p>:</span> <span class=n>public</span> <span class=n>Device</span><span class=p>{</span>
+</span></span><span class=line><span class=cl><span class=n>public</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>    <span class=n>std</span><span class=p>::</span> <span class=n>string</span> <span class=n>getDescription</span><span class=p>()</span> <span class=k>const</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=k>return</span> <span class=s2>&#34;screen&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>PLUMA_INHERIT_PROVIDER</span><span class=p>(</span><span class=n>Screen</span><span class=p>,</span> <span class=n>Device</span><span class=p>);</span>
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=n>keyboard</span><span class=o>.</span><span class=n>hpp</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;Pluma/Pluma.hpp&#34;</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;device.hpp&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>class</span> <span class=n>Keyboard</span><span class=p>:</span> <span class=n>public</span> <span class=n>Device</span><span class=p>{</span>
+</span></span><span class=line><span class=cl><span class=n>public</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>    <span class=n>std</span><span class=p>::</span> <span class=n>string</span> <span class=n>getDescription</span><span class=p>()</span> <span class=k>const</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=k>return</span> <span class=s2>&#34;keyboard&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>PLUMA_INHERIT_PROVIDER</span><span class=p>(</span><span class=n>Keyboard</span><span class=p>,</span> <span class=n>Device</span><span class=p>);</span>
+</span></span></code></pre></td></tr></table></div></div><p>上面实现了<code>screen</code>及<code>keyboard</code>的逻辑。实现了之后，需要进行注册：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-c data-lang=c><span class=line><span class=cl><span class=c1>// connect.cpp
+</span></span></span><span class=line><span class=cl><span class=c1></span> <span class=cp>#include</span> <span class=cpf>&lt;Pluma/Connector.hpp&gt;</span><span class=cp>
+</span></span></span><span class=line><span class=cl><span class=cp></span> <span class=cp>#include</span> <span class=cpf>&#34;keyboard.hpp&#34;</span><span class=cp>
+</span></span></span><span class=line><span class=cl><span class=cp></span> <span class=cp>#include</span> <span class=cpf>&#34;screen.hpp&#34;</span><span class=cp>
+</span></span></span><span class=line><span class=cl><span class=cp></span>
+</span></span><span class=line><span class=cl> <span class=n>PLUMA_CONNECTOR</span>
+</span></span><span class=line><span class=cl> <span class=kt>bool</span> <span class=nf>connect</span><span class=p>(</span><span class=n>pluma</span><span class=o>::</span><span class=n>Host</span><span class=o>&amp;</span> <span class=n>host</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>     <span class=c1>// add a keyboard provider to host
+</span></span></span><span class=line><span class=cl><span class=c1></span>     <span class=n>host</span><span class=p>.</span><span class=nf>add</span><span class=p>(</span> <span class=n>new</span> <span class=nf>KeyboardProvider</span><span class=p>()</span> <span class=p>);</span>
+</span></span><span class=line><span class=cl>     <span class=n>host</span><span class=p>.</span><span class=nf>add</span><span class=p>(</span> <span class=n>new</span> <span class=nf>ScreenProvider</span><span class=p>()</span> <span class=p>);</span>
+</span></span><span class=line><span class=cl>     <span class=k>return</span> <span class=nb>true</span><span class=p>;</span>
+</span></span><span class=line><span class=cl> <span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>这里在<code>connect</code>中进行了两个子类的注册。之所以使用<code>connect</code>是因为后面的pluma使用的时候，官网给出的示例代码中，会从<code>connect</code>入口开始调用。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=n>main</span><span class=o>.</span><span class=n>cpp</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;Pluma/Pluma.hpp&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#include &#34;device.hpp&#34;</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &lt;iostream&gt;</span>
+</span></span><span class=line><span class=cl><span class=c1>#include &lt;vector&gt;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=ne>int</span> <span class=n>main</span><span class=p>()</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>pluma</span><span class=p>::</span> <span class=n>Pluma</span> <span class=n>plugins</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=n>plugins</span><span class=o>.</span><span class=n>acceptProviderType</span><span class=o>&lt;</span><span class=n>DeviceProvider</span><span class=o>&gt;</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>    <span class=n>plugins</span><span class=o>.</span><span class=n>load</span><span class=p>(</span><span class=s2>&#34;./plugin/connect.so&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=o>//</span><span class=n>plugins</span><span class=o>.</span><span class=n>load</span><span class=p>(</span><span class=s2>&#34;./plugin/keyboard.so&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=n>std</span><span class=p>::</span><span class=n>vector</span><span class=o>&lt;</span><span class=n>DeviceProvider</span><span class=o>*&gt;</span> <span class=n>providers</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=n>plugins</span><span class=o>.</span><span class=n>getProviders</span><span class=p>(</span><span class=n>providers</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=n>std</span><span class=p>::</span><span class=n>cout</span><span class=o>&lt;&lt;</span><span class=s2>&#34;size for providers are:&#34;</span> <span class=o>&lt;&lt;</span> <span class=n>providers</span><span class=o>.</span><span class=n>size</span><span class=p>()</span><span class=o>&lt;&lt;</span> <span class=n>std</span><span class=p>::</span> <span class=n>endl</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=k>if</span> <span class=p>(</span><span class=o>!</span><span class=n>providers</span><span class=o>.</span><span class=n>empty</span><span class=p>()){</span>
+</span></span><span class=line><span class=cl>        <span class=k>for</span> <span class=p>(</span><span class=n>std</span><span class=p>::</span><span class=n>vector</span><span class=o>&lt;</span><span class=n>DeviceProvider</span><span class=o>*&gt;</span><span class=p>::</span><span class=n>iterator</span> <span class=n>device</span><span class=o>=</span><span class=n>providers</span><span class=o>.</span><span class=n>begin</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>            <span class=n>device</span> <span class=o>!=</span> <span class=n>providers</span><span class=o>.</span><span class=n>end</span><span class=p>();</span> <span class=o>++</span> <span class=n>device</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>            <span class=n>Device</span><span class=o>*</span> <span class=n>myDevice</span> <span class=o>=</span> <span class=p>(</span><span class=o>*</span><span class=n>device</span><span class=p>)</span><span class=o>-&gt;</span><span class=n>create</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>            <span class=n>std</span><span class=p>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=n>myDevice</span><span class=o>-&gt;</span><span class=n>getDescription</span><span class=p>()</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=p>::</span><span class=n>endl</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>            <span class=n>delete</span> <span class=n>myDevice</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>这里就是主要的调用逻辑了。官网中<code>myDevice</code>附近的拼写有主意，这是个坑了。<br>这里回顾下目录结构：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>.
+</span></span><span class=line><span class=cl>├── connect.cpp
+</span></span><span class=line><span class=cl>├── device.hpp
+</span></span><span class=line><span class=cl>├── device.cpp
+</span></span><span class=line><span class=cl>├── keyboard.hpp
+</span></span><span class=line><span class=cl>├── main.cpp
+</span></span><span class=line><span class=cl>├── plugin                          # 用来存储插件结果的目录
+</span></span><span class=line><span class=cl>├── Pluma                           # 为了方便，这里将Pluma的include及src文件均拷贝到这里
+</span></span><span class=line><span class=cl>│   ├── Config.hpp
+</span></span><span class=line><span class=cl>│   ├── Connector.hpp
+</span></span><span class=line><span class=cl>│   ├── Dir.cpp
+</span></span><span class=line><span class=cl>│   ├── Dir.hpp
+</span></span><span class=line><span class=cl>│   ├── DLibrary.cpp
+</span></span><span class=line><span class=cl>│   ├── DLibrary.hpp
+</span></span><span class=line><span class=cl>│   ├── Host.cpp
+</span></span><span class=line><span class=cl>│   ├── Host.hpp
+</span></span><span class=line><span class=cl>│   ├── PluginManager.cpp
+</span></span><span class=line><span class=cl>│   ├── PluginManager.hpp
+</span></span><span class=line><span class=cl>│   ├── Pluma.hpp
+</span></span><span class=line><span class=cl>│   ├── Pluma.inl
+</span></span><span class=line><span class=cl>│   ├── Provider.cpp
+</span></span><span class=line><span class=cl>│   ├── Provider.hpp
+</span></span><span class=line><span class=cl>│   └── uce-dirent.h
+</span></span><span class=line><span class=cl>└── screen.hpp
+</span></span></code></pre></td></tr></table></div></div><p>看下编译过程：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl># 生成device.so
+</span></span><span class=line><span class=cl>g++ connect.cpp device.cpp Pluma/*.cpp -shared -fPIC -o plugin/connect.so -I./
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl># 生成main
+</span></span><span class=line><span class=cl>g++ main.cpp device.hpp device.cpp Pluma/*.cpp -o main -I./ -ldl
+</span></span></code></pre></td></tr></table></div></div><p>执行：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>./main
+</span></span><span class=line><span class=cl>size for providers are:2
+</span></span><span class=line><span class=cl>keyboard
+</span></span><span class=line><span class=cl>screen
+</span></span></code></pre></td></tr></table></div></div><p>以上就是实践的内容了。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/c++/>C++</a>
+<a href=/tags/pluma/>Pluma</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/3-sum-%E9%97%AE%E9%A2%98/><div class=article-details><h2 class=article-title>3-sum 问题</h2></div></a></article><article><a href=/p/%E5%90%88%E5%B9%B6%E5%8C%BA%E9%97%B4/><div class=article-details><h2 class=article-title>合并区间</h2></div></a></article><article><a href=/p/x86_64-%E5%AF%84%E5%AD%98%E5%99%A8%E4%BC%A0%E5%8F%82%E6%96%B9%E5%BC%8F/><div class=article-details><h2 class=article-title>x86_64 寄存器传参方式</h2></div></a></article><article><a href=/p/golang-proto3-%E4%BD%BF%E7%94%A8/><div class=article-details><h2 class=article-title>golang proto3 使用</h2></div></a></article><article><a href=/p/centos-%E5%AE%89%E8%A3%85docker%E5%B9%B6%E6%9E%84%E5%BB%BAgolang%E9%95%9C%E5%83%8F/><div class=article-details><h2 class=article-title>centos 安装docker并构建golang镜像</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

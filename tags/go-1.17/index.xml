@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Go-1.17 on 李岩</title><link>https://liyan-ah.github.io/tags/go-1.17/</link><description>Recent content in Go-1.17 on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Fri, 03 Mar 2023 20:59:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/go-1.17/index.xml" rel="self" type="application/rss+xml"/><item><title>go-1.17+ 调用规约</title><link>https://liyan-ah.github.io/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/</link><pubDate>Fri, 03 Mar 2023 20:59:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/</guid><description>&lt;blockquote>
+&lt;p>&lt;code>go-1.17&lt;/code>是一个很不友好的版本，这里我指的是函数调用规约的变更。在此之前，虽然栈传参比较奇怪，但是在掌握了规律后，参数信息很好获取。升级到&lt;code>go-1.17&lt;/code>之后，笔者发现变更后的寄存器传值方式并不是系统的调用规约，至少和&lt;code>C/C++&lt;/code>的是完全不一致的。这个问题使得笔者在处理&lt;code>ebpf&lt;/code>方案时，始终无法覆盖&lt;code>go-1.17+&lt;/code>的版本。虽然短期不会造成影响，线上服务使用的大多还在&lt;code>go-1.16&lt;/code>以下，但是这始终是一个绕不过去的问题。近期通过查阅资料和参考其他开源项目里对这部分内容的处理，整理了一下&lt;code>go-1.17+&lt;/code>的调用规约。&lt;/p>
+&lt;/blockquote>
+&lt;p>&lt;code>go&lt;/code>在&lt;code>1.17&lt;/code>之前使用的是内存栈来传递参数，这种传参的方式使得&lt;code>golang&lt;/code>的语言设计很灵活：&lt;code>golang&lt;/code>函数的多返回值能够很容易的实现。同样的，由于&lt;code>golang&lt;/code>需要这样灵活的能力，是的系统默认的调用规约方式并不适用。在&lt;a class="link" href="https://go.googlesource.com/proposal/&amp;#43;/refs/changes/78/248178/1/design/40724-register-calling.md" target="_blank" rel="noopener"
+>Proposal: Register-based Go calling convention&lt;/a>文章里对这个问题进行了详细的讨论，总结起来是&lt;code>golang&lt;/code>的特性使得使用系统默认规约并不能带来多语言交互上的收益，且&lt;code>golang&lt;/code>希望保持独特。&lt;br>
+本文下面会给出总结的调用规约，并且给出验证程序。本文档的整理所基于的平台是&lt;code>x86_64&lt;/code>的&lt;code>centos8&lt;/code>系统。其他架构下，寄存器名称可能不同。&lt;/p>
+&lt;h1 id="调用规约">
+&lt;a href="#%e8%b0%83%e7%94%a8%e8%a7%84%e7%ba%a6">#&lt;/a>
+调用规约
+&lt;/h1>&lt;p>入参：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">参数序号&lt;/th>
+&lt;th style="text-align: left">标准规约&lt;/th>
+&lt;th style="text-align: left">golang规约&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">1&lt;/td>
+&lt;td style="text-align: left">rdi&lt;/td>
+&lt;td style="text-align: left">rax&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">2&lt;/td>
+&lt;td style="text-align: left">rsi&lt;/td>
+&lt;td style="text-align: left">rbx&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">3&lt;/td>
+&lt;td style="text-align: left">rdx&lt;/td>
+&lt;td style="text-align: left">rcx&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">4&lt;/td>
+&lt;td style="text-align: left">rcx&lt;/td>
+&lt;td style="text-align: left">rdi&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">5&lt;/td>
+&lt;td style="text-align: left">r8&lt;/td>
+&lt;td style="text-align: left">rsi&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">6&lt;/td>
+&lt;td style="text-align: left">r9&lt;/td>
+&lt;td style="text-align: left">r8&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">7&lt;/td>
+&lt;td style="text-align: left">栈传值&lt;/td>
+&lt;td style="text-align: left">r9&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">8&lt;/td>
+&lt;td style="text-align: left">栈传值&lt;/td>
+&lt;td style="text-align: left">r10&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">9&lt;/td>
+&lt;td style="text-align: left">栈传值&lt;/td>
+&lt;td style="text-align: left">r11&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">10&lt;/td>
+&lt;td style="text-align: left">栈传值&lt;/td>
+&lt;td style="text-align: left">栈传值&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;p>返回值：&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th style="text-align: left">参数序号&lt;/th>
+&lt;th style="text-align: left">标准规约&lt;/th>
+&lt;th style="text-align: left">golang规约&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td style="text-align: left">1&lt;/td>
+&lt;td style="text-align: left">rax&lt;/td>
+&lt;td style="text-align: left">rax&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">2&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">rbx&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">3&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">rcx&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">4&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">rdi&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">5&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">rsi&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">6&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">r8&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">7&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">r9&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">8&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">r10&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">9&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">r11&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td style="text-align: left">10&lt;/td>
+&lt;td style="text-align: left">-&lt;/td>
+&lt;td style="text-align: left">栈传值&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h1 id="验证规约">
+&lt;a href="#%e9%aa%8c%e8%af%81%e8%a7%84%e7%ba%a6">#&lt;/a>
+验证规约
+&lt;/h1>&lt;p>这个条件是比较好验证的，看下验证代码:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-golang" data-lang="golang">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// go version 1.18
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// ./go_18/arg/main.go
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="kn">package&lt;/span> &lt;span class="nx">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kn">import&lt;/span> &lt;span class="s">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">//go:noinline
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="kd">func&lt;/span> &lt;span class="nf">longArgs&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">a1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a11&lt;/span> &lt;span class="kt">uint64&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">r1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">r11&lt;/span> &lt;span class="kt">uint64&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="nx">a1&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a2&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a3&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a4&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a5&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a6&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a7&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a8&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a9&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a10&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a11&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">11&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kd">func&lt;/span> &lt;span class="nf">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">a1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a11&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="nf">longArgs&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">11&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">fmt&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">a1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">a11&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>先生成&lt;code>plan9&lt;/code>代码以说明参数传入和参数返回均是使用的寄存器，并且寄存器顺序是一致的（内存传参时也是）。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;span class="lnt">75
+&lt;/span>&lt;span class="lnt">76
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-golang" data-lang="golang">&lt;span class="line">&lt;span class="cl">&lt;span class="k">go&lt;/span> &lt;span class="nx">build&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="nx">gcflags&lt;/span> &lt;span class="s">&amp;#34;-N -S -l&amp;#34;&lt;/span> &lt;span class="o">&amp;gt;&amp;gt;&lt;/span> &lt;span class="nx">arg&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">info&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">#&lt;/span> &lt;span class="nx">然后截取部分生成&lt;/span> &lt;span class="nx">plan9&lt;/span> &lt;span class="nx">汇编&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">#&lt;/span> &lt;span class="nx">go_18&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="nx">arg&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">longArgs&lt;/span> &lt;span class="nx">STEXT&lt;/span> &lt;span class="nx">nosplit&lt;/span> &lt;span class="nx">size&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="mi">411&lt;/span> &lt;span class="nx">args&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="mh">0x68&lt;/span> &lt;span class="nx">locals&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="mh">0x50&lt;/span> &lt;span class="nx">funcid&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="mh">0x0&lt;/span> &lt;span class="nx">align&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="mh">0x0&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0000&lt;/span> &lt;span class="mo">00000&lt;/span> &lt;span class="nx">TEXT&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">longArgs&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SB&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">NOSPLIT&lt;/span>&lt;span class="p">|&lt;/span>&lt;span class="nx">ABIInternal&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">80&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">104&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0000&lt;/span> &lt;span class="mo">00000&lt;/span> &lt;span class="nx">SUBQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">80&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">SP&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0004&lt;/span> &lt;span class="mo">00004&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">BP&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">72&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0009&lt;/span> &lt;span class="mo">0000&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">LEAQ&lt;/span> &lt;span class="mi">72&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">BP&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x000e&lt;/span> &lt;span class="mo">00014&lt;/span> &lt;span class="nx">FUNCDATA&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">gclocals&lt;/span>&lt;span class="err">·&lt;/span>&lt;span class="mi">33&lt;/span>&lt;span class="nf">cdeccccebe80329f1fdbee7f5874cb&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SB&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x000e&lt;/span> &lt;span class="mo">00014&lt;/span> &lt;span class="nx">FUNCDATA&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">gclocals&lt;/span>&lt;span class="err">·&lt;/span>&lt;span class="mi">33&lt;/span>&lt;span class="nf">cdeccccebe80329f1fdbee7f5874cb&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SB&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x000e&lt;/span> &lt;span class="mo">00014&lt;/span> &lt;span class="nx">FUNCDATA&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">longArgs&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">arginfo1&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SB&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x000e&lt;/span> &lt;span class="mo">00014&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">AX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a1&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">120&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="err">#&lt;/span> &lt;span class="nx">注意这里的读取参数寄存器&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0013&lt;/span> &lt;span class="mo">0001&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">BX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a2&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">128&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x001b&lt;/span> &lt;span class="mo">00027&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">CX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a3&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">136&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0023&lt;/span> &lt;span class="mo">00035&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DI&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a4&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">144&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x002b&lt;/span> &lt;span class="mo">00043&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">SI&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a5&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">152&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0033&lt;/span> &lt;span class="mo">00051&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">R8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a6&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">160&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x003b&lt;/span> &lt;span class="mo">0005&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">R9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a7&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">168&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0043&lt;/span> &lt;span class="mo">00067&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">R10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a8&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">176&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x004b&lt;/span> &lt;span class="mo">00075&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">R11&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a9&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">184&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0053&lt;/span> &lt;span class="mo">000&lt;/span>&lt;span class="mi">83&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r1&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x005c&lt;/span> &lt;span class="mo">000&lt;/span>&lt;span class="mi">92&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r2&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0065&lt;/span> &lt;span class="mo">00101&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r3&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">48&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x006e&lt;/span> &lt;span class="mo">00110&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r4&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">40&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0077&lt;/span> &lt;span class="mo">0011&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r5&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">32&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0080&lt;/span> &lt;span class="mo">0012&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r6&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">24&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0089&lt;/span> &lt;span class="mo">00137&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r7&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0092&lt;/span> &lt;span class="mo">00146&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r8&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x009b&lt;/span> &lt;span class="mo">00155&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">r9&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00a3&lt;/span> &lt;span class="mo">00163&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r10&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">104&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00ac&lt;/span> &lt;span class="mo">00172&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r11&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">112&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00b5&lt;/span> &lt;span class="mo">001&lt;/span>&lt;span class="mi">81&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a1&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">120&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00ba&lt;/span> &lt;span class="mo">001&lt;/span>&lt;span class="mi">86&lt;/span> &lt;span class="nx">INCQ&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00bd&lt;/span> &lt;span class="mo">001&lt;/span>&lt;span class="mi">89&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r1&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00c2&lt;/span> &lt;span class="mo">001&lt;/span>&lt;span class="mi">94&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a2&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">128&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00ca&lt;/span> &lt;span class="mo">00202&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00ce&lt;/span> &lt;span class="mo">00206&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r2&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00d3&lt;/span> &lt;span class="mo">00211&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a3&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">136&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00db&lt;/span> &lt;span class="mo">0021&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00df&lt;/span> &lt;span class="mo">00223&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r3&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">48&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00e4&lt;/span> &lt;span class="mo">0022&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a4&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">144&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00ec&lt;/span> &lt;span class="mo">00236&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">4&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00f0&lt;/span> &lt;span class="mo">00240&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r4&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">40&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00f5&lt;/span> &lt;span class="mo">00245&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a5&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">152&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x00fd&lt;/span> &lt;span class="mo">00253&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">5&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0101&lt;/span> &lt;span class="mo">00257&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r5&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">32&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0106&lt;/span> &lt;span class="mo">00262&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a6&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">160&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x010e&lt;/span> &lt;span class="mo">00270&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">6&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0112&lt;/span> &lt;span class="mo">00274&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r6&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">24&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0117&lt;/span> &lt;span class="mo">0027&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a7&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">168&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x011f&lt;/span> &lt;span class="mo">002&lt;/span>&lt;span class="mi">87&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">7&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0123&lt;/span> &lt;span class="mo">002&lt;/span>&lt;span class="mi">91&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r7&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0128&lt;/span> &lt;span class="mo">002&lt;/span>&lt;span class="mi">96&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a8&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">176&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0130&lt;/span> &lt;span class="mo">00304&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0134&lt;/span> &lt;span class="mo">0030&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r8&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0139&lt;/span> &lt;span class="mo">00313&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a9&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">184&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0141&lt;/span> &lt;span class="mo">00321&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">9&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0145&lt;/span> &lt;span class="mo">00325&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">r9&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0149&lt;/span> &lt;span class="mo">0032&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a10&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">88&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span> &lt;span class="err">#&lt;/span> &lt;span class="nx">这里使用栈传递a10&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x014e&lt;/span> &lt;span class="mo">00334&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0152&lt;/span> &lt;span class="mo">0033&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r10&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">104&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0157&lt;/span> &lt;span class="mo">00343&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">a11&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">96&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x015c&lt;/span> &lt;span class="mo">0034&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">11&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">DX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0160&lt;/span> &lt;span class="mo">00352&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="nx">DX&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r11&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">112&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="err">#&lt;/span> &lt;span class="nx">这里使用栈传递&lt;/span> &lt;span class="nx">a11&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0165&lt;/span> &lt;span class="mo">00357&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r1&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">AX&lt;/span> &lt;span class="err">#&lt;/span> &lt;span class="nx">注意这里返回参数的寄存器&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x016a&lt;/span> &lt;span class="mo">00362&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r2&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">BX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x016f&lt;/span> &lt;span class="mo">00367&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r3&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">48&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">CX&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0174&lt;/span> &lt;span class="mo">00372&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r4&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">40&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">DI&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0179&lt;/span> &lt;span class="mo">00377&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r5&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">32&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">SI&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x017e&lt;/span> &lt;span class="mo">003&lt;/span>&lt;span class="mi">82&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r6&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">24&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">R8&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0183&lt;/span> &lt;span class="mo">003&lt;/span>&lt;span class="mi">87&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r7&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">R9&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0188&lt;/span> &lt;span class="mo">003&lt;/span>&lt;span class="mi">92&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">r8&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">R10&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x018d&lt;/span> &lt;span class="mo">003&lt;/span>&lt;span class="mi">97&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">r9&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">R11&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0191&lt;/span> &lt;span class="mo">00401&lt;/span> &lt;span class="nx">MOVQ&lt;/span> &lt;span class="mi">72&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">SP&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="nx">BP&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x0196&lt;/span> &lt;span class="mo">00406&lt;/span> &lt;span class="nx">ADDQ&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="mi">80&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">SP&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="mh">0x019a&lt;/span> &lt;span class="mo">00410&lt;/span> &lt;span class="nx">RET&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>从上面的&lt;code>plan9&lt;/code>可以看出来，函数入参和返回值确实是使用寄存器传递的，且寄存器信息是一致的。实际上到这里就足够了。但是笔者还需要确定下使用的寄存器名称并进行验证，因为这些参数是在做&lt;code>ebpf&lt;/code>逻辑处理的时候使用的。&lt;/p>
+&lt;h1 id="使用ebpf获取入参并输出">
+&lt;a href="#%e4%bd%bf%e7%94%a8ebpf%e8%8e%b7%e5%8f%96%e5%85%a5%e5%8f%82%e5%b9%b6%e8%be%93%e5%87%ba">#&lt;/a>
+使用ebpf获取入参并输出
+&lt;/h1>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">// 这里表述下依据plan9寄存器符号推测的实际寄存器名称：
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM1(x) ((x)-&amp;gt;rax)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM2(x) ((x)-&amp;gt;rbx)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM3(x) ((x)-&amp;gt;rcx)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM4(x) ((x)-&amp;gt;rdi)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM5(x) ((x)-&amp;gt;rsi)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM6(x) ((x)-&amp;gt;r8)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM7(x) ((x)-&amp;gt;r9)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM8(x) ((x)-&amp;gt;r10)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#define GO_PARAM9(x) ((x)-&amp;gt;r11)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">struct event {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u32 pid;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u8 comm[64];
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // args
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg0;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg1;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg2;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg3;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg4;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg5;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg6;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg7;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg8;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg9;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 arg10;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">};
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SEC(&amp;#34;uprobe/main.longArgs&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">int uprobe__main_long_args(struct pt_regs *ctx) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct event args={};
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.pid = bpf_get_current_pid_tgid();
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bpf_get_current_comm(&amp;amp;args.comm, sizeof(args.comm));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // read args 0-8，从寄存器中获取
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg0 = GO_PARAM1(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg1 = GO_PARAM2(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg2 = GO_PARAM3(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg3 = GO_PARAM4(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg4 = GO_PARAM5(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg5 = GO_PARAM6(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg6 = GO_PARAM7(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg7 = GO_PARAM8(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> args.arg8 = GO_PARAM9(ctx);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // read args 9-10，从栈上获取
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bpf_probe_read(&amp;amp;args.arg9, sizeof(args.arg9), (void*)(PT_REGS_SP(ctx))+8);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bpf_probe_read(&amp;amp;args.arg10, sizeof(args.arg10), (void*)(PT_REGS_SP(ctx))+16);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bpf_perf_event_output(ctx, &amp;amp;events, BPF_F_CURRENT_CPU, &amp;amp;args, sizeof(args));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return 0;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>编译完成后，启动这部分&lt;code>ebpf&lt;/code>监听任务：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># 启动监听&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">./&lt;/span>&lt;span class="n">go_18&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="n">bin_path&lt;/span> &lt;span class="o">./&lt;/span>&lt;span class="n">arg&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">arg&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="n">uprobe&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">longArgs&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2023&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span> &lt;span class="mi">22&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">07&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">32&lt;/span> &lt;span class="n">Listening&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="n">events&lt;/span>&lt;span class="o">..&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># 触发 ./arg/arg 执行&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2023&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span> &lt;span class="mi">22&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">07&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">46&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">756309&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">comm&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">arg&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2023&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span> &lt;span class="mi">22&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">07&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">46&lt;/span> &lt;span class="o">/&lt;/span>&lt;span class="n">home&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">odin&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">pdliyan&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">blog&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">go_18&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">arg&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">arg&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">longArgs&lt;/span> &lt;span class="n">value&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="n">Pid&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">756309&lt;/span> &lt;span class="n">Comm&lt;/span>&lt;span class="p">:[&lt;/span>&lt;span class="mi">97&lt;/span> &lt;span class="mi">114&lt;/span> &lt;span class="mi">103&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">_&lt;/span>&lt;span class="p">:[&lt;/span>&lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">Arg0&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1&lt;/span> &lt;span class="n">Arg1&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">2&lt;/span> &lt;span class="n">Arg2&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">3&lt;/span> &lt;span class="n">Arg3&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">4&lt;/span> &lt;span class="n">Arg4&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">5&lt;/span> &lt;span class="n">Arg5&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">6&lt;/span> &lt;span class="n">Arg6&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">7&lt;/span> &lt;span class="n">Arg7&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="n">Arg8&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="n">Arg9&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">10&lt;/span> &lt;span class="n">Arg10&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">11&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># 请注意这里的参数是和我们的代码一致的。&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2023&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span> &lt;span class="mi">22&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">07&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">46&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="n">info&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="n">Pid&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">756309&lt;/span> &lt;span class="n">Comm&lt;/span>&lt;span class="p">:[&lt;/span>&lt;span class="mi">97&lt;/span> &lt;span class="mi">114&lt;/span> &lt;span class="mi">103&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">_&lt;/span>&lt;span class="p">:[&lt;/span>&lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">Arg0&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1&lt;/span> &lt;span class="n">Arg1&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">2&lt;/span> &lt;span class="n">Arg2&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">3&lt;/span> &lt;span class="n">Arg3&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">4&lt;/span> &lt;span class="n">Arg4&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">5&lt;/span> &lt;span class="n">Arg5&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">6&lt;/span> &lt;span class="n">Arg6&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">7&lt;/span> &lt;span class="n">Arg7&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">8&lt;/span> &lt;span class="n">Arg8&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">9&lt;/span> &lt;span class="n">Arg9&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">10&lt;/span> &lt;span class="n">Arg10&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">11&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># 退出&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2023&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">03&lt;/span> &lt;span class="mi">22&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">08&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">38&lt;/span> &lt;span class="n">Received&lt;/span> &lt;span class="k">signal&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">exiting&lt;/span> &lt;span class="n">program&lt;/span>&lt;span class="o">...&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>从上面的输出可以确定&lt;code>plan9&lt;/code>的寄存器符号和实际寄存器的对应关系是正确的。&lt;/p>
+&lt;p>以上就验证了困扰笔者的&lt;code>go-17+&lt;/code>参数调用规约的问题。可以看到，依旧十分的奇葩。&lt;br>
+周末愉快。&lt;/p></description></item></channel></rss>

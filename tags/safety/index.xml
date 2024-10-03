@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Safety on 李岩</title><link>https://liyan-ah.github.io/tags/safety/</link><description>Recent content in Safety on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Fri, 21 Oct 2022 19:48:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/safety/index.xml" rel="self" type="application/rss+xml"/><item><title>ebpf采集mysql请求信息及ebpf对应用安全的思考</title><link>https://liyan-ah.github.io/p/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/</link><pubDate>Fri, 21 Oct 2022 19:48:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/</guid><description>&lt;blockquote>
+&lt;p>本文笔者继续介绍&lt;code>ebpf&lt;/code> 的应用：使用&lt;code>bpftrace&lt;/code>采集&lt;code>mysql&lt;/code>连接信息，包括数据库地址、&lt;code>db_name&lt;/code>、&lt;code>user_name&lt;/code>。在展示采集操作的同时，附上对&lt;code>ebpf&lt;/code>对云时代应用安全的一些思考。&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="目标">
+&lt;a href="#%e7%9b%ae%e6%a0%87">#&lt;/a>
+目标
+&lt;/h1>&lt;p>使用&lt;code>bpftrace&lt;/code>对一个运行中进程的&lt;code>mysql&lt;/code>请求进行采集，目标采集内容包括数据库地址、&lt;code>db_name&lt;/code>、&lt;code>user_name&lt;/code>。&lt;/p>
+&lt;p>目标进程代码如下:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;span class="lnt">75
+&lt;/span>&lt;span class="lnt">76
+&lt;/span>&lt;span class="lnt">77
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="n">blog&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">go&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">package&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;log&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;net/http&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;time&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;github.com/gin-gonic/gin&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">_&lt;/span> &lt;span class="s2">&amp;#34;github.com/go-sql-driver/mysql&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;xorm.io/xorm&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">var&lt;/span> &lt;span class="n">sqlE&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">xorm&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Engine&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">init&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">fmt&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;init from main&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">var&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="n">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sqlE&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">xorm&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewEngine&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;mysql&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;test:mysqltest@tcp(localhost:3306)/test_db?charset=utf8&amp;amp;parseTime=true&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="err">随便写个数据库信息，假装是正确的&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;init mysql failed: %+v&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, err)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="n">Resp&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Code&lt;/span> &lt;span class="ne">int&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;code&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Msg&lt;/span> &lt;span class="n">string&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;msg&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="n">SqlInfo&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Id&lt;/span> &lt;span class="n">int64&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span> &lt;span class="n">xorm&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;pk bigint(20)&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Created&lt;/span> &lt;span class="n">time&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Time&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;created&amp;#34;&lt;/span> &lt;span class="n">xorm&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;created&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Info&lt;/span> &lt;span class="n">string&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;info&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">sql&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">SqlInfo&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="n">TableName&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="n">string&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="s2">&amp;#34;sql_info&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">Mysql&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Context&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">info&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Query&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;info&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">info&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s2">&amp;#34;&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">now&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">time&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Now&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Format&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;2008-01-02 15:04:05&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">info&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">now&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sqlInfo&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">SqlInfo&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Info&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">info&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">affected&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">sqlE&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Insert&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">sqlInfo&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;insert db with error: %+v&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, err)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span> &lt;span class="k">else&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;affect column nums: &lt;/span>&lt;span class="si">%d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, affected)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">JSON&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">StatusOK&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">Resp&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="n">Code&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">Msg&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;mysql req over&amp;#34;&lt;/span>&lt;span class="p">})&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Default&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srv&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Server&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Addr&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;0.0.0.0:9981&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Println&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;server start at: 0.0.0.0:9981&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GET&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/sql&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">Mysql&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Handler&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">r&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">err&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">srv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ListenAndServe&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">log&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Fatal&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;error with start listener&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="bpftrace-代码">
+&lt;a href="#bpftrace-%e4%bb%a3%e7%a0%81">#&lt;/a>
+bpftrace 代码
+&lt;/h1>&lt;p>直接上代码了：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#! /bin/bpftrace&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/*&lt;/span> &lt;span class="err">保存在&lt;/span> &lt;span class="n">blog&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">blog&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">bt&lt;/span> &lt;span class="err">里&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">这里使用的&lt;/span> &lt;span class="n">uprobe&lt;/span> &lt;span class="err">函数为&lt;/span> &lt;span class="n">go&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">sql&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">driver&lt;/span> &lt;span class="err">里的内容。源代码在：&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">https&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">//&lt;/span>&lt;span class="n">github&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">com&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">sql&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">driver&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">mysql&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">blob&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">master&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">connector&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">go&lt;/span>&lt;span class="c1">#L23&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">定义为：&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">func&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">connector&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="n">Connect&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span> &lt;span class="n">context&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Context&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">driver&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Conn&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">error&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="o">...&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">*/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">blog&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;github.com/go-sql-driver/mysql.(*connector).Connect&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;Connect&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">sarg0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="err">获取&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">cfg&lt;/span> &lt;span class="err">的地址&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">user_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="err">获取&lt;/span> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">cfg&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">User&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">user_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="err">获取&lt;/span> &lt;span class="n">len&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">cfg&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">User&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//$&lt;/span>&lt;span class="n">pwd_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">16&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="err">请注意这里注释掉的内容&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//$&lt;/span>&lt;span class="n">pwd_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">24&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">addr_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">48&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">addr_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">db_addr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">db_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">cfg_addr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">72&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;user: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($user_addr, $user_len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span>&lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;pwd: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($pwd_addr, $pwd_len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;addr: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($addr_addr, $addr_len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;db: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($db_addr, $db_len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>而后启动应用程序&lt;code>blog&lt;/code>，启动监听程序&lt;code>sudo bpftrace ./blog.bt&lt;/code>，请求&lt;code>blog&lt;/code>的&lt;code>/sql&lt;/code>接口以触发&lt;code>blog&lt;/code>对&lt;code>sql&lt;/code>的请求。整个过程对&lt;code>blog&lt;/code>程序来说没有任何的不平凡之处，但是我们已经获取了采集结果。
+附上执行结果如下：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="o">$&lt;/span> &lt;span class="o">./&lt;/span>&lt;span class="n">blog&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">init&lt;/span> &lt;span class="n">from&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">debug&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="n">WARNING&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">Creating&lt;/span> &lt;span class="n">an&lt;/span> &lt;span class="n">Engine&lt;/span> &lt;span class="n">instance&lt;/span> &lt;span class="n">with&lt;/span> &lt;span class="n">the&lt;/span> &lt;span class="n">Logger&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">Recovery&lt;/span> &lt;span class="n">middleware&lt;/span> &lt;span class="n">already&lt;/span> &lt;span class="n">attached&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">debug&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="n">WARNING&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">Running&lt;/span> &lt;span class="ow">in&lt;/span> &lt;span class="s2">&amp;#34;debug&amp;#34;&lt;/span> &lt;span class="n">mode&lt;/span>&lt;span class="o">.&lt;/span> &lt;span class="n">Switch&lt;/span> &lt;span class="n">to&lt;/span> &lt;span class="s2">&amp;#34;release&amp;#34;&lt;/span> &lt;span class="n">mode&lt;/span> &lt;span class="ow">in&lt;/span> &lt;span class="n">production&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="n">using&lt;/span> &lt;span class="n">env&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="k">export&lt;/span> &lt;span class="n">GIN_MODE&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">release&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="n">using&lt;/span> &lt;span class="n">code&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">SetMode&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ReleaseMode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2022&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">21&lt;/span> &lt;span class="mi">20&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">15&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">38&lt;/span> &lt;span class="n">server&lt;/span> &lt;span class="n">start&lt;/span> &lt;span class="n">at&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mf">0.0&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="mf">0.0&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">9981&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">debug&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">GET&lt;/span> &lt;span class="o">/&lt;/span>&lt;span class="n">sql&lt;/span> &lt;span class="o">--&amp;gt;&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Mysql&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="mi">3&lt;/span> &lt;span class="n">handlers&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="mi">2022&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">21&lt;/span> &lt;span class="mi">20&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">18&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">52&lt;/span> &lt;span class="n">insert&lt;/span> &lt;span class="n">db&lt;/span> &lt;span class="n">with&lt;/span> &lt;span class="n">error&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">dial&lt;/span> &lt;span class="n">tcp&lt;/span> &lt;span class="mf">127.0&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="mf">0.1&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">3306&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">connect&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">connection&lt;/span> &lt;span class="n">refused&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="mi">2022&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">21&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="mi">20&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">18&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">52&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="mi">200&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="mf">3.679499&lt;/span>&lt;span class="n">ms&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="mf">127.0&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="mf">0.1&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="n">GET&lt;/span> &lt;span class="s2">&amp;#34;/sql&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>此时，在采集侧：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">$ sudo ./blog.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Attaching 1 probe...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Connect
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">user: test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">addr: localhost:3306
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">db: test_db
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>我们已经获取了需要的信息。&lt;/p>
+&lt;h1 id="对采集代码的一些说明">
+&lt;a href="#%e5%af%b9%e9%87%87%e9%9b%86%e4%bb%a3%e7%a0%81%e7%9a%84%e4%b8%80%e4%ba%9b%e8%af%b4%e6%98%8e">#&lt;/a>
+对采集代码的一些说明
+&lt;/h1>&lt;p>&lt;code>bpftrace&lt;/code>语法部分，参见&lt;a class="link" href="https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md" target="_blank" rel="noopener"
+>github-bpftrace-reference_guid&lt;/a>。里面有&lt;code>ebpf&lt;/code>的一些简单介绍以及&lt;code>bpftrace&lt;/code>的使用说明。代码里的主要逻辑，则需要参见&lt;code>golang&lt;/code>的语法来理解。部分简述如下：&lt;/p>
+&lt;ul>
+&lt;li>类里的方法，实际调用的时候，第一个参数为对象的地址；&lt;/li>
+&lt;li>go-1.16 及之前的版本，参数存储在栈上；&lt;/li>
+&lt;/ul>
+&lt;p>剩下的内容就比较好理解了：&lt;code>ebpf&lt;/code>提供的核心功能包括按需读取用户空间内的数据。结合&lt;a class="link" href="https://liyan-ah.github.io/2022/06/06/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/#more" target="_blank" rel="noopener"
+>golang-常见类型字节数&lt;/a>可以比较快的推导出我们需要的信息在地址内的偏移量。同时，在&lt;a class="link" href="https://liyan-ah.github.io/2022/07/22/bpfTrace-%E8%BF%BD%E8%B8%AA-uprobe/#more" target="_blank" rel="noopener"
+>bpftrace无侵入遍历golang链表&lt;/a>曾经提到过，如果目标对象比较大，无法在&lt;code>ebpf&lt;/code>代码里完整定义该对象（内核限制单个&lt;code>ebpf&lt;/code>的&lt;code>hook&lt;/code>点程序的栈空间大小在&lt;code>512B&lt;/code>），我们访问对象里的成员时，使用的方法就是偏移量访问。&lt;/p>
+&lt;h1 id="ebpf-与应用安全的一些思考">
+&lt;a href="#ebpf-%e4%b8%8e%e5%ba%94%e7%94%a8%e5%ae%89%e5%85%a8%e7%9a%84%e4%b8%80%e4%ba%9b%e6%80%9d%e8%80%83">#&lt;/a>
+ebpf 与应用安全的一些思考
+&lt;/h1>&lt;p>最后提一点自己的思考。&lt;br>
+请回到&lt;code>bpftrace&lt;/code>代码里，里面的&lt;code>pasword&lt;/code>信息获取的操作被注释掉了。其实我们去掉注释，仍然能够按照预期获取结果。这就意味着，如果我们拥有机器上的权限，并且机器满足我们的采集需求，应用里的核心信息（这里是数据库的密码）将被简单的获取。无论数据库密码如何存储：配置文件、源代码、通过网络配置下发等。只要有涉及数据库访问的用户态函数，有涉及数据库密码传递的内容，这些信息存在被获取的风险，只要采集人拥有&lt;code>root&lt;/code>权限。&lt;br>
+这里引出另外一个问题：如果一个用户拥有机器上的管理员权限，&lt;code>TA&lt;/code>是否应该拥有机器上所有进程信息的准入权。这里的进程信息，显然是包括机器上容器内的进程信息的，无论是公有云或者私有云。&lt;/p></description></item></channel></rss>

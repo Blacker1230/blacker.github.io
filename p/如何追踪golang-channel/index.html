@@ -1,0 +1,741 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 2023年就要结束了，算起来距离上一次更新也有很久了。搜肠刮肚，总得在23年结束前再搞两篇总结，算是有始有终。总结今年，总还是绕不过 BPF，golang。既然如此，就对BPF观测golang这个话题再往下挖掘下，先做第一篇文章。下旬如果有时间并且顺利的话，希望能把BPF的原理总结完成。\n在无侵入观测服务拓扑四元组的一种实现中，笔者有提到追踪golang处理过程的两个无法解决的问题是golang里的channel处理以及goroutine pool。再深究下，这两个问题实际上都可以归纳到对channel的处理，因为很多goroutine pool都离不了channel的使用，比如Jeffail/tunny这个库。\n本文将会构建一个channel的追踪的方案。\n"><title>如何追踪golang channel?</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="如何追踪golang channel?"><meta property='og:description' content=" 2023年就要结束了，算起来距离上一次更新也有很久了。搜肠刮肚，总得在23年结束前再搞两篇总结，算是有始有终。总结今年，总还是绕不过 BPF，golang。既然如此，就对BPF观测golang这个话题再往下挖掘下，先做第一篇文章。下旬如果有时间并且顺利的话，希望能把BPF的原理总结完成。\n在无侵入观测服务拓扑四元组的一种实现中，笔者有提到追踪golang处理过程的两个无法解决的问题是golang里的channel处理以及goroutine pool。再深究下，这两个问题实际上都可以归纳到对channel的处理，因为很多goroutine pool都离不了channel的使用，比如Jeffail/tunny这个库。\n本文将会构建一个channel的追踪的方案。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='golang'><meta property='article:tag' content='channel'><meta property='article:tag' content='bpf'><meta property='article:tag' content='observe'><meta property='article:published_time' content='2023-12-08T19:43:00+00:00'><meta property='article:modified_time' content='2023-12-08T19:43:00+00:00'><meta name=twitter:title content="如何追踪golang channel?"><meta name=twitter:description content=" 2023年就要结束了，算起来距离上一次更新也有很久了。搜肠刮肚，总得在23年结束前再搞两篇总结，算是有始有终。总结今年，总还是绕不过 BPF，golang。既然如此，就对BPF观测golang这个话题再往下挖掘下，先做第一篇文章。下旬如果有时间并且顺利的话，希望能把BPF的原理总结完成。\n在无侵入观测服务拓扑四元组的一种实现中，笔者有提到追踪golang处理过程的两个无法解决的问题是golang里的channel处理以及goroutine pool。再深究下，这两个问题实际上都可以归纳到对channel的处理，因为很多goroutine pool都离不了channel的使用，比如Jeffail/tunny这个库。\n本文将会构建一个channel的追踪的方案。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/>如何追踪golang channel?</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Dec 08, 2023</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 5 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>2023年就要结束了，算起来距离上一次更新也有很久了。搜肠刮肚，总得在23年结束前再搞两篇总结，算是有始有终。总结今年，总还是绕不过 BPF，golang。既然如此，就对BPF观测golang这个话题再往下挖掘下，先做第一篇文章。下旬如果有时间并且顺利的话，希望能把BPF的原理总结完成。</p></blockquote><p>在<a class=link href=https://liyan-ah.github.io/2023/03/29/cljb83dmh003dkcs61joe1kfh/#more target=_blank rel=noopener>无侵入观测服务拓扑四元组的一种实现</a>中，笔者有提到追踪<code>golang</code>处理过程的两个无法解决的问题是<code>golang</code>里的<code>channel</code>处理以及<code>goroutine pool</code>。再深究下，这两个问题实际上都可以归纳到对<code>channel</code>的处理，因为很多<code>goroutine pool</code>都离不了<code>channel</code>的使用，比如<a class=link href=https://github.com/Jeffail/tunny target=_blank rel=noopener>Jeffail/tunny</a>这个库。<br>本文将会构建一个<code>channel</code>的追踪的方案。</p><h1 id=一追踪效果><a href=#%e4%b8%80%e8%bf%bd%e8%b8%aa%e6%95%88%e6%9e%9c>#</a>
+一、追踪效果</h1><p>按照惯例，我们还是来看下效果。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// terminal 1，启动服务
+</span></span><span class=line><span class=cl>$ ./drink-srv
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>// terminal 2，启动追踪脚本
+</span></span><span class=line><span class=cl>$ sudo bpftrace ./drink.bt
+</span></span><span class=line><span class=cl>Attaching 7 probes...  // 启动后停止在这里
+</span></span><span class=line><span class=cl>serve HTTP: /alcohol   // 触发接口后输出
+</span></span><span class=line><span class=cl>caller: /alcohol, callee: :/unknown/prepare/hotel
+</span></span><span class=line><span class=cl>serve HTTP: /tea
+</span></span><span class=line><span class=cl>caller: /tea, callee: :/unknown/prepare/club
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>// terminal 3，触发服务接口
+</span></span><span class=line><span class=cl>$ curl &#34;localhost:1423/alcohol?age=22&#34;
+</span></span><span class=line><span class=cl>$ curl &#34;localhost:1423/tea?age=12&#34;
+</span></span></code></pre></td></tr></table></div></div><h1 id=二方案设计><a href=#%e4%ba%8c%e6%96%b9%e6%a1%88%e8%ae%be%e8%ae%a1>#</a>
+二、方案设计</h1><p>关于<code>golang channel</code>的实现及设计，可以参见<a class=link href=https://i6448038.github.io/2019/04/11/go-channel/ target=_blank rel=noopener>图解Go的channel底层实现</a>，里面有非常生动的动图实现；搭配源码食用更好<a class=link href=https://github.com/golang/go/blob/master/src/runtime/chan.go target=_blank rel=noopener>runtime/chan.go</a>。<br>笔者在这里再简单的总结下，对<code>send</code>及<code>recv</code>两种操作设计的状态做一个简单的概述：
+<code>chan-send</code>的状态：
+<img src=/chan-send.png loading=lazy alt="overwrote existing file">
+<code>chan-recv</code>的状态：
+<img src=/chan-recv.png loading=lazy alt="overwrote existing file"></p><p>比如，对于下面的代码，派生出的<code>g1</code>在开启<code>select</code>后，由于<code>ticketChan</code>是空的，会触发<code>g1</code>让出<code>m</code>里的执行权限，进入<code>gopark</code>状态。同时，<code>ticketChan</code>会将<code>g1</code>封装成<code>sudog</code>，放到<code>recvq</code>队列中。当一段时间之后，其他的<code>g</code>将数据写入<code>channel</code>里时，会在<code>chansend</code>时，检查到<code>recvq</code>不为空，会直接将数据拷贝到空闲的<code>sudog</code>中。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=k>var</span> <span class=n>ticketChan</span> <span class=o>=</span> <span class=n>make</span><span class=p>(</span><span class=n>chan</span> <span class=n>TicketInfo</span><span class=p>,</span> <span class=mi>10</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>HandleDrink</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>for</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=n>select</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=k>case</span> <span class=n>info</span><span class=p>,</span> <span class=n>ok</span> <span class=p>:</span><span class=o>=</span> <span class=o>&lt;-</span><span class=n>ticketChan</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>			<span class=o>...</span>
+</span></span><span class=line><span class=cl>            <span class=p>}</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>go</span> <span class=n>HandleDrink</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>    <span class=o>...</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p><code>chanrecv</code>进入<code>recvq</code>对应的<code>golang</code>处理逻辑在这里：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// runtime/chan.go
+</span></span><span class=line><span class=cl>	...
+</span></span><span class=line><span class=cl>	// no sender available: block on this channel.
+</span></span><span class=line><span class=cl>	gp := getg()
+</span></span><span class=line><span class=cl>	mysg := acquireSudog()
+</span></span><span class=line><span class=cl>	mysg.releasetime = 0
+</span></span><span class=line><span class=cl>	if t0 != 0 {
+</span></span><span class=line><span class=cl>		mysg.releasetime = -1
+</span></span><span class=line><span class=cl>	}
+</span></span><span class=line><span class=cl>	// No stack splits between assigning elem and enqueuing mysg
+</span></span><span class=line><span class=cl>	// on gp.waiting where copystack can find it.
+</span></span><span class=line><span class=cl>	mysg.elem = ep
+</span></span><span class=line><span class=cl>	mysg.waitlink = nil
+</span></span><span class=line><span class=cl>	gp.waiting = mysg
+</span></span><span class=line><span class=cl>	mysg.g = gp
+</span></span><span class=line><span class=cl>	mysg.isSelect = false
+</span></span><span class=line><span class=cl>	mysg.c = c
+</span></span><span class=line><span class=cl>	gp.param = nil
+</span></span><span class=line><span class=cl>	c.recvq.enqueue(mysg)
+</span></span><span class=line><span class=cl>    ...
+</span></span><span class=line><span class=cl>    
+</span></span></code></pre></td></tr></table></div></div><p><code>chansend</code>直接将数据拷贝到<code>recvq</code>对应的<code>golang</code>处理逻辑在这里：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>// runtime/chan.go
+</span></span><span class=line><span class=cl>	...
+</span></span><span class=line><span class=cl>	if sg := c.recvq.dequeue(); sg != nil {
+</span></span><span class=line><span class=cl>		// Found a waiting receiver. We pass the value we want to send
+</span></span><span class=line><span class=cl>		// directly to the receiver, bypassing the channel buffer (if any).
+</span></span><span class=line><span class=cl>		send(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
+</span></span><span class=line><span class=cl>		return true
+</span></span><span class=line><span class=cl>	}
+</span></span><span class=line><span class=cl>    ...
+</span></span><span class=line><span class=cl>    
+</span></span></code></pre></td></tr></table></div></div><h1 id=三方案实现><a href=#%e4%b8%89%e6%96%b9%e6%a1%88%e5%ae%9e%e7%8e%b0>#</a>
+三、方案实现</h1><p>了解了<code>channel</code>的处理流程，追踪的方案就比较明确了，直接在关键的函数处设置<code>hook</code>点即可。先来看下目标服务：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span><span class=lnt>105
+</span><span class=lnt>106
+</span><span class=lnt>107
+</span><span class=lnt>108
+</span><span class=lnt>109
+</span><span class=lnt>110
+</span><span class=lnt>111
+</span><span class=lnt>112
+</span><span class=lnt>113
+</span><span class=lnt>114
+</span><span class=lnt>115
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=n>package</span> <span class=n>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;log&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;net/http&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;strconv&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;github.com/gin-gonic/gin&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>const</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=n>ALCOHOL</span> <span class=o>=</span> <span class=n>iota</span> <span class=o>+</span> <span class=mi>1001</span>
+</span></span><span class=line><span class=cl>	<span class=n>COCO</span>
+</span></span><span class=line><span class=cl>	<span class=n>COFFEE</span>
+</span></span><span class=line><span class=cl>	<span class=n>TEA</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>TicketInfo</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>Age</span>  <span class=ne>int</span>
+</span></span><span class=line><span class=cl>	<span class=n>Name</span> <span class=n>string</span>
+</span></span><span class=line><span class=cl>	<span class=n>Type</span> <span class=ne>int</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>var</span> <span class=n>ticketChan</span> <span class=o>=</span> <span class=n>make</span><span class=p>(</span><span class=n>chan</span> <span class=n>TicketInfo</span><span class=p>,</span> <span class=mi>10</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>AlcoholH</span><span class=p>(</span><span class=n>c</span> <span class=o>*</span><span class=n>gin</span><span class=o>.</span><span class=n>Context</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>ticket</span> <span class=o>=</span> <span class=n>TicketInfo</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>err</span> <span class=n>error</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticket</span><span class=o>.</span><span class=n>Age</span><span class=p>,</span> <span class=n>err</span> <span class=o>=</span> <span class=n>strconv</span><span class=o>.</span><span class=n>Atoi</span><span class=p>(</span><span class=n>c</span><span class=o>.</span><span class=n>Query</span><span class=p>(</span><span class=s2>&#34;age&#34;</span><span class=p>))</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>c</span><span class=o>.</span><span class=n>String</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>StatusOK</span><span class=p>,</span> <span class=s2>&#34;handle failed&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>return</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticket</span><span class=o>.</span><span class=n>Name</span> <span class=o>=</span> <span class=n>c</span><span class=o>.</span><span class=n>Query</span><span class=p>(</span><span class=s2>&#34;name&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticket</span><span class=o>.</span><span class=n>Type</span> <span class=o>=</span> <span class=n>ALCOHOL</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticketChan</span> <span class=o>&lt;-</span> <span class=n>ticket</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>TeaH</span><span class=p>(</span><span class=n>c</span> <span class=o>*</span><span class=n>gin</span><span class=o>.</span><span class=n>Context</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>ticket</span> <span class=o>=</span> <span class=n>TicketInfo</span><span class=p>{}</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>err</span> <span class=n>error</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticket</span><span class=o>.</span><span class=n>Age</span><span class=p>,</span> <span class=n>err</span> <span class=o>=</span> <span class=n>strconv</span><span class=o>.</span><span class=n>Atoi</span><span class=p>(</span><span class=n>c</span><span class=o>.</span><span class=n>Query</span><span class=p>(</span><span class=s2>&#34;age&#34;</span><span class=p>))</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;handle failed, &#34;</span><span class=p>,</span> <span class=n>err</span><span class=o>.</span><span class=n>Error</span><span class=p>())</span>
+</span></span><span class=line><span class=cl>		<span class=n>c</span><span class=o>.</span><span class=n>String</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>StatusOK</span><span class=p>,</span> <span class=s2>&#34;handle failed&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>return</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticket</span><span class=o>.</span><span class=n>Name</span> <span class=o>=</span> <span class=n>c</span><span class=o>.</span><span class=n>Query</span><span class=p>(</span><span class=s2>&#34;name&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticket</span><span class=o>.</span><span class=n>Type</span> <span class=o>=</span> <span class=n>TEA</span>
+</span></span><span class=line><span class=cl>	<span class=n>ticketChan</span> <span class=o>&lt;-</span> <span class=n>ticket</span>
+</span></span><span class=line><span class=cl>	<span class=n>c</span><span class=o>.</span><span class=n>String</span><span class=p>(</span><span class=n>http</span><span class=o>.</span><span class=n>StatusOK</span><span class=p>,</span> <span class=s2>&#34;okay&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>HandleDrink</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>select</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=k>case</span> <span class=n>info</span><span class=p>,</span> <span class=n>ok</span> <span class=p>:</span><span class=o>=</span> <span class=o>&lt;-</span><span class=n>ticketChan</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>			<span class=k>if</span> <span class=o>!</span><span class=n>ok</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>				<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;chan closed.&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>				<span class=k>return</span>
+</span></span><span class=line><span class=cl>			<span class=p>}</span>
+</span></span><span class=line><span class=cl>			<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;get ticket&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=k>switch</span> <span class=n>info</span><span class=o>.</span><span class=n>Type</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>			<span class=k>case</span> <span class=n>ALCOHOL</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>				<span class=n>Alcohol</span><span class=p>(</span><span class=n>info</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=k>case</span> <span class=n>COCO</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>				<span class=n>SoftDrink</span><span class=p>(</span><span class=n>info</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=k>case</span> <span class=n>COFFEE</span><span class=p>,</span> <span class=n>TEA</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>				<span class=n>Tea</span><span class=p>(</span><span class=n>info</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=n>default</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>				<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;unknown drink type&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>			<span class=p>}</span>
+</span></span><span class=line><span class=cl>		<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>Alcohol</span><span class=p>(</span><span class=n>ticket</span> <span class=n>TicketInfo</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>url</span> <span class=o>=</span> <span class=s2>&#34;http://localhost/unknown/prepare/hotel&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=n>http</span><span class=o>.</span><span class=n>DefaultClient</span><span class=o>.</span><span class=n>Get</span><span class=p>(</span><span class=n>url</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>SoftDrink</span><span class=p>(</span><span class=n>ticket</span> <span class=n>TicketInfo</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nb>log</span><span class=o>.</span><span class=n>Printf</span><span class=p>(</span><span class=s2>&#34;[</span><span class=si>%s</span><span class=s2>, </span><span class=si>%d</span><span class=s2>] drink </span><span class=si>%d</span><span class=s2>&#34;</span><span class=p>,</span> <span class=n>ticket</span><span class=o>.</span><span class=n>Name</span><span class=p>,</span> <span class=n>ticket</span><span class=o>.</span><span class=n>Age</span><span class=p>,</span> <span class=n>ticket</span><span class=o>.</span><span class=n>Type</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>Tea</span><span class=p>(</span><span class=n>ticket</span> <span class=n>TicketInfo</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>url</span> <span class=o>=</span> <span class=s2>&#34;http://localhost/unknown/prepare/club&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=n>http</span><span class=o>.</span><span class=n>DefaultClient</span><span class=o>.</span><span class=n>Get</span><span class=p>(</span><span class=n>url</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>defer</span> <span class=k>func</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>close</span><span class=p>(</span><span class=n>ticketChan</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}()</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=n>go</span> <span class=n>HandleDrink</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>r</span> <span class=o>=</span> <span class=n>gin</span><span class=o>.</span><span class=n>Default</span><span class=p>()</span>
+</span></span><span class=line><span class=cl>	<span class=n>r</span><span class=o>.</span><span class=n>GET</span><span class=p>(</span><span class=s2>&#34;/alcohol&#34;</span><span class=p>,</span> <span class=n>AlcoholH</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>r</span><span class=o>.</span><span class=n>GET</span><span class=p>(</span><span class=s2>&#34;/tea&#34;</span><span class=p>,</span> <span class=n>TeaH</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>srv</span> <span class=o>=</span> <span class=o>&amp;</span><span class=n>http</span><span class=o>.</span><span class=n>Server</span><span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>Addr</span><span class=p>:</span>    <span class=s2>&#34;127.0.0.1:1423&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>		<span class=n>Handler</span><span class=p>:</span> <span class=n>r</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>srv</span><span class=o>.</span><span class=n>ListenAndServe</span><span class=p>()</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nb>log</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=s2>&#34;failed to handle service listen&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>		<span class=k>return</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>对于这样的一个服务，希望达到示例中的追踪效果，对应的方案为：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span><span class=lnt>105
+</span><span class=lnt>106
+</span><span class=lnt>107
+</span><span class=lnt>108
+</span><span class=lnt>109
+</span><span class=lnt>110
+</span><span class=lnt>111
+</span><span class=lnt>112
+</span><span class=lnt>113
+</span><span class=lnt>114
+</span><span class=lnt>115
+</span><span class=lnt>116
+</span><span class=lnt>117
+</span><span class=lnt>118
+</span><span class=lnt>119
+</span><span class=lnt>120
+</span><span class=lnt>121
+</span><span class=lnt>122
+</span><span class=lnt>123
+</span><span class=lnt>124
+</span><span class=lnt>125
+</span><span class=lnt>126
+</span><span class=lnt>127
+</span><span class=lnt>128
+</span><span class=lnt>129
+</span><span class=lnt>130
+</span><span class=lnt>131
+</span><span class=lnt>132
+</span><span class=lnt>133
+</span><span class=lnt>134
+</span><span class=lnt>135
+</span><span class=lnt>136
+</span><span class=lnt>137
+</span><span class=lnt>138
+</span><span class=lnt>139
+</span><span class=lnt>140
+</span><span class=lnt>141
+</span><span class=lnt>142
+</span><span class=lnt>143
+</span><span class=lnt>144
+</span><span class=lnt>145
+</span><span class=lnt>146
+</span><span class=lnt>147
+</span><span class=lnt>148
+</span><span class=lnt>149
+</span><span class=lnt>150
+</span><span class=lnt>151
+</span><span class=lnt>152
+</span><span class=lnt>153
+</span><span class=lnt>154
+</span><span class=lnt>155
+</span><span class=lnt>156
+</span><span class=lnt>157
+</span><span class=lnt>158
+</span><span class=lnt>159
+</span><span class=lnt>160
+</span><span class=lnt>161
+</span><span class=lnt>162
+</span><span class=lnt>163
+</span><span class=lnt>164
+</span><span class=lnt>165
+</span><span class=lnt>166
+</span><span class=lnt>167
+</span><span class=lnt>168
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=c1>#define OFF_TASK_THRD 4992</span>
+</span></span><span class=line><span class=cl><span class=c1>#define OFF_THRD_FSBASE 40</span>
+</span></span><span class=line><span class=cl><span class=c1>#define GOID_OFFSET 152</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;runtime.runqput&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;runqput&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=err>@</span><span class=n>new_go</span><span class=p>[</span><span class=n>tid</span><span class=p>,</span> <span class=n>pid</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>p_goid</span> <span class=o>=</span> <span class=err>@</span><span class=n>new_go</span><span class=p>[</span><span class=n>tid</span><span class=p>,</span> <span class=n>pid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)(</span><span class=n>reg</span><span class=p>(</span><span class=s2>&#34;bx&#34;</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>p_goid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span>  <span class=o>=</span> <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>p_goid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;runtime.newproc1&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;newproc1&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)(</span><span class=n>reg</span><span class=p>(</span><span class=s2>&#34;bx&#34;</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>new_go</span><span class=p>[</span><span class=n>tid</span><span class=p>,</span> <span class=n>pid</span><span class=p>]</span> <span class=o>=</span> <span class=o>$</span><span class=n>goid</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=err>这里，将</span> <span class=n>caller</span> <span class=err>信息和写入</span> <span class=n>channel</span> <span class=err>信息的</span> <span class=n>key</span> <span class=err>关联起来</span>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;runtime.chansend&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;chansend&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>cur</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>curtask</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>fsbase</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>cur</span><span class=o>+</span><span class=n>OFF_TASK_THRD</span><span class=o>+</span><span class=n>OFF_THRD_FSBASE</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>fsbase</span><span class=o>-</span><span class=mi>8</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=err>如果当前执行</span><span class=n>goroutine中没有caller</span><span class=err>，跳过</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span><span class=p>(</span><span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>chan</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>reg</span><span class=p>(</span><span class=s2>&#34;ax&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>qcount</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint32</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>chan</span> <span class=o>+</span> <span class=mi>0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>buf</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>chan</span><span class=o>+</span><span class=mi>16</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>send_addr</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>send_len</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>]</span>  <span class=o>=</span> <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;runtime.chanrecv&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;chanrecv&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>cur</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>curtask</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>fsbase</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>cur</span><span class=o>+</span><span class=n>OFF_TASK_THRD</span><span class=o>+</span><span class=n>OFF_THRD_FSBASE</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>fsbase</span><span class=o>-</span><span class=mi>8</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>chan</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>reg</span><span class=p>(</span><span class=s2>&#34;ax&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>qcount</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint32</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>chan</span> <span class=o>+</span> <span class=mi>0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>buf</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>chan</span><span class=o>+</span><span class=mi>16</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=err>@</span><span class=n>send_addr</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>send_addr</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span>  <span class=o>=</span> <span class=err>@</span><span class=n>send_len</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;runtime.send&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;send&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>chan</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>reg</span><span class=p>(</span><span class=s2>&#34;ax&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>sg</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>reg</span><span class=p>(</span><span class=s2>&#34;bx&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>sg</span><span class=o>+</span><span class=mi>0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>qcount</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint32</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>chan</span><span class=o>+</span><span class=mi>0</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>send_addr</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span>  <span class=o>=</span> <span class=err>@</span><span class=n>send_len</span><span class=p>[</span><span class=o>$</span><span class=n>chan</span><span class=p>,</span> <span class=o>$</span><span class=n>qcount</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>/*</span>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>serverHandler</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>srv</span> <span class=o>*</span><span class=n>Server</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=p>(</span><span class=n>sh</span> <span class=n>serverHandler</span><span class=p>)</span> <span class=n>ServeHTTP</span><span class=p>(</span><span class=n>rw</span> <span class=n>ResponseWriter</span><span class=p>,</span> <span class=n>req</span> <span class=o>*</span><span class=n>Request</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl><span class=o>*/</span>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;net/http.serverHandler.ServeHTTP&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;ServeHTTP&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>cur</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>curtask</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>fsbase</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>cur</span><span class=o>+</span><span class=n>OFF_TASK_THRD</span><span class=o>+</span><span class=n>OFF_THRD_FSBASE</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>fsbase</span><span class=o>-</span><span class=mi>8</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>req_addr</span> <span class=o>=</span> <span class=n>reg</span><span class=p>(</span><span class=s2>&#34;di&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>Request</span><span class=o>.</span><span class=n>URL</span><span class=p>)</span> <span class=o>=</span> <span class=mi>16</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>url_addr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_addr</span><span class=o>+</span><span class=mi>16</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>URL</span><span class=o>.</span><span class=n>Path</span><span class=p>)</span> <span class=o>=</span> <span class=mi>56</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>path_addr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>url_addr</span><span class=o>+</span><span class=mi>56</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>path_len</span>  <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>url_addr</span><span class=o>+</span><span class=mi>64</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>=</span> <span class=o>$</span><span class=n>path_addr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span>  <span class=o>=</span> <span class=o>$</span><span class=n>path_len</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;serve HTTP: </span><span class=si>%s</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, str($path_addr, $path_len));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>/*</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=p>(</span><span class=n>c</span> <span class=o>*</span><span class=n>Client</span><span class=p>)</span> <span class=k>do</span><span class=p>(</span><span class=n>req</span> <span class=o>*</span><span class=n>Request</span><span class=p>)</span> <span class=p>(</span><span class=n>retres</span> <span class=o>*</span><span class=n>Response</span><span class=p>,</span> <span class=n>reterr</span> <span class=n>error</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl><span class=o>*/</span>
+</span></span><span class=line><span class=cl><span class=n>uprobe</span><span class=p>:</span><span class=o>./</span><span class=n>drink</span><span class=o>-</span><span class=n>srv</span><span class=p>:</span><span class=s2>&#34;net/http.(*Client).do&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>prob_mark</span> <span class=o>=</span> <span class=s2>&#34;do&#34;</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>=</span> <span class=err>@</span><span class=n>prob</span><span class=p>[</span><span class=o>$</span><span class=n>prob_mark</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>cur</span> <span class=o>=</span> <span class=p>(</span><span class=n>uint64</span><span class=p>)</span><span class=n>curtask</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>fsbase</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>cur</span><span class=o>+</span><span class=n>OFF_TASK_THRD</span><span class=o>+</span><span class=n>OFF_THRD_FSBASE</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>g</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>fsbase</span><span class=o>-</span><span class=mi>8</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>goid</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>g</span><span class=o>+</span><span class=n>GOID_OFFSET</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span><span class=p>){</span>
+</span></span><span class=line><span class=cl>    <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;</span><span class=si>%d</span><span class=s2>: has no caller.</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, $goid);</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>req_addr</span> <span class=o>=</span> <span class=n>reg</span><span class=p>(</span><span class=s2>&#34;bx&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>Request</span><span class=o>.</span><span class=n>URL</span><span class=p>)</span> <span class=o>=</span> <span class=mi>16</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>url_addr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_addr</span><span class=o>+</span><span class=mi>16</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>URL</span><span class=o>.</span><span class=n>Host</span><span class=p>)</span> <span class=o>=</span> <span class=mi>40</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>host_addr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_addr</span><span class=o>+</span><span class=mi>40</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>host_len</span>  <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>req_addr</span><span class=o>+</span><span class=mi>48</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>offset</span><span class=p>(</span><span class=n>URL</span><span class=o>.</span><span class=n>Path</span><span class=p>)</span> <span class=o>=</span> <span class=mi>56</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>path_addr</span> <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>url_addr</span><span class=o>+</span><span class=mi>56</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>path_len</span>  <span class=o>=</span> <span class=o>*</span><span class=p>(</span><span class=n>uint64</span><span class=o>*</span><span class=p>)(</span><span class=o>$</span><span class=n>url_addr</span><span class=o>+</span><span class=mi>64</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>c_addr</span> <span class=o>=</span> <span class=err>@</span><span class=n>caller_addr</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>  <span class=o>$</span><span class=n>c_len</span>  <span class=o>=</span> <span class=err>@</span><span class=n>caller_len</span><span class=p>[</span><span class=o>$</span><span class=n>goid</span><span class=p>];</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>printf</span><span class=p>(</span><span class=s2>&#34;caller: </span><span class=si>%s</span><span class=s2>, callee: </span><span class=si>%s</span><span class=s2>:</span><span class=si>%s</span>
+</span></span><span class=line><span class=cl><span class=s2>&#34;, str($c_addr, $c_len),</span>
+</span></span><span class=line><span class=cl>    <span class=nb>str</span><span class=p>(</span><span class=o>$</span><span class=n>host_addr</span><span class=p>,</span> <span class=o>$</span><span class=n>host_len</span><span class=p>),</span> <span class=nb>str</span><span class=p>(</span><span class=o>$</span><span class=n>path_addr</span><span class=p>,</span> <span class=o>$</span><span class=n>path_len</span><span class=p>));</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><h1 id=四追踪的风险><a href=#%e5%9b%9b%e8%bf%bd%e8%b8%aa%e7%9a%84%e9%a3%8e%e9%99%a9>#</a>
+四、追踪的风险</h1><p>至此，看起来<code>golang channel</code>是可以追踪的。但是实际上并非如此。比如如下这个示例：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=k>func</span> <span class=n>HandleDrink</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>for</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=n>select</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=k>case</span> <span class=n>info</span><span class=p>,</span> <span class=n>ok</span> <span class=p>:</span><span class=o>=</span> <span class=o>&lt;-</span><span class=n>ticketChan</span><span class=p>:</span>
+</span></span><span class=line><span class=cl>			<span class=o>...</span>
+</span></span><span class=line><span class=cl>        <span class=n>default</span><span class=p>:</span> <span class=o>//</span> <span class=err>注意这个</span> <span class=n>stop</span>
+</span></span><span class=line><span class=cl>        	<span class=o>//</span> <span class=n>no</span> <span class=n>stop</span> <span class=n>here</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>这段逻辑在代码编写、编译阶段均无问题，是一段完全合理的逻辑。当我们试图追踪这段代码时：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>$ sudo bpftrace ./drink.bt
+</span></span><span class=line><span class=cl>Attaching 7 probes...
+</span></span><span class=line><span class=cl>^C  // 直接停止，没有请求
+</span></span><span class=line><span class=cl>@prob[chanrecv]: 908571
+</span></span></code></pre></td></tr></table></div></div><p>注意，此时并没有做任何的操作，但是这个<code>chanrecv</code>这个<code>hook</code>点已经触发了数十万次。而我们知道，<code>BPF hook</code>点的触发并非没有开销的。因此，目标的代码在完全合理的情况下，我们的追踪程序会给系统带来很大的负载。这显然是我们需要避免的。</p><p>以上，周末愉快～</p></section><footer class=article-footer><section class=article-tags><a href=/tags/golang/>Golang</a>
+<a href=/tags/channel/>Channel</a>
+<a href=/tags/bpf/>Bpf</a>
+<a href=/tags/observe/>Observe</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/><div class=article-details><h2 class=article-title>BPF追踪Go程序的挑战</h2></div></a></article><article><a href=/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/><div class=article-details><h2 class=article-title>golang常见类型作为参数的eBPF解析</h2></div></a></article><article><a href=/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/><div class=article-details><h2 class=article-title>基于ebpf实现的gls</h2></div></a></article><article><a href=/p/bpf-lru_hash_map-%E5%8F%8A-hash_map-%E7%9A%84%E4%BD%BF%E7%94%A8%E5%BC%82%E5%B8%B8/><div class=article-details><h2 class=article-title>BPF LRU_HASH_MAP 及 HASH_MAP 的使用异常</h2></div></a></article><article><a href=/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/><div class=article-details><h2 class=article-title>go-1.17+ 调用规约</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

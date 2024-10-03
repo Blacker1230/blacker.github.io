@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Tail Call on 李岩</title><link>https://liyan-ah.github.io/tags/tail-call/</link><description>Recent content in Tail Call on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Sat, 26 Aug 2023 12:30:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/tail-call/index.xml" rel="self" type="application/rss+xml"/><item><title>eBPF tail-calls示例</title><link>https://liyan-ah.github.io/p/ebpf-tail-calls%E7%A4%BA%E4%BE%8B/</link><pubDate>Sat, 26 Aug 2023 12:30:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/ebpf-tail-calls%E7%A4%BA%E4%BE%8B/</guid><description>&lt;blockquote>
+&lt;p>最近在整理一些技术文章。本来希望把涉及ELF的内容整理出来，结果发现太难了。ELF涉及的内容要多很多，如果要把希望整理的内容表述清楚，还需要做一些准备的工作。刚好最近完成了tail-calls 的调研，先把关于eBPF的tail-calls的功能整理下吧。&lt;/p>
+&lt;/blockquote>
+&lt;p>&lt;code>eBPF&lt;/code>程序是事件驱动的，这就意味着当目标事件触发后，程序才能执行。考虑这样一个场景：有几个不同的&lt;code>BPF&lt;/code>程序均挂载在相同的&lt;code>hook&lt;/code>点上，而执行需要保持一定的顺序。这时就需要借助&lt;code>tail calls&lt;/code>的功能来实现。&lt;/p>
+&lt;h1 id="一tail-calls-与-bpf2bpf-calls的对比">
+&lt;a href="#%e4%b8%80tail-calls-%e4%b8%8e-bpf2bpf-calls%e7%9a%84%e5%af%b9%e6%af%94">#&lt;/a>
+一、tail calls 与 bpf2bpf calls的对比
+&lt;/h1>&lt;p>首先要说明的是，将不同的逻辑分支都放到一个&lt;code>bpf&lt;/code>程序里是很难进行的，因为&lt;code>bpf&lt;/code>程序存在严格的限制：比如512B的执行栈。处理逻辑复杂，往往意味着需要使用的结构体就多，很容易就超出了512B的限制，编译时会报类似如下的错误：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="n">cd&lt;/span> &lt;span class="n">uretprobe&lt;/span> &lt;span class="o">&amp;amp;&amp;amp;&lt;/span> &lt;span class="n">go&lt;/span> &lt;span class="n">generate&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">./&lt;/span>&lt;span class="n">uretprobe&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">24&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">15&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">error&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">Looks&lt;/span> &lt;span class="n">like&lt;/span> &lt;span class="n">the&lt;/span> &lt;span class="n">BPF&lt;/span> &lt;span class="n">stack&lt;/span> &lt;span class="n">limit&lt;/span> &lt;span class="n">of&lt;/span> &lt;span class="mi">512&lt;/span> &lt;span class="n">bytes&lt;/span> &lt;span class="n">is&lt;/span> &lt;span class="n">exceeded&lt;/span>&lt;span class="o">.&lt;/span> &lt;span class="n">Please&lt;/span> &lt;span class="n">move&lt;/span> &lt;span class="n">large&lt;/span> &lt;span class="n">on&lt;/span> &lt;span class="n">stack&lt;/span> &lt;span class="n">variables&lt;/span> &lt;span class="n">into&lt;/span> &lt;span class="n">BPF&lt;/span> &lt;span class="n">per&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">cpu&lt;/span> &lt;span class="n">array&lt;/span> &lt;span class="n">map&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">^&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">./&lt;/span>&lt;span class="n">uretprobe&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">24&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">15&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">error&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">Looks&lt;/span> &lt;span class="n">like&lt;/span> &lt;span class="n">the&lt;/span> &lt;span class="n">BPF&lt;/span> &lt;span class="n">stack&lt;/span> &lt;span class="n">limit&lt;/span> &lt;span class="n">of&lt;/span> &lt;span class="mi">512&lt;/span> &lt;span class="n">bytes&lt;/span> &lt;span class="n">is&lt;/span> &lt;span class="n">exceeded&lt;/span>&lt;span class="o">.&lt;/span> &lt;span class="n">Please&lt;/span> &lt;span class="n">move&lt;/span> &lt;span class="n">large&lt;/span> &lt;span class="n">on&lt;/span> &lt;span class="n">stack&lt;/span> &lt;span class="n">variables&lt;/span> &lt;span class="n">into&lt;/span> &lt;span class="n">BPF&lt;/span> &lt;span class="n">per&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">cpu&lt;/span> &lt;span class="n">array&lt;/span> &lt;span class="n">map&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>对于使用而言，&lt;code>tail calls&lt;/code>从一定程度上规避这个问题：使用&lt;code>bpf_tail_call&lt;/code>跳转（注意，跳转callee函数执行完成后，不会继续执行&lt;code>caller&lt;/code>剩余的逻辑，而是直接退出）的目标函数，函数内部的栈资源限制计算是独立的，会覆盖调用&lt;code>caller&lt;/code>的栈帧。而常规的&lt;code>bpf2bpf call&lt;/code>，调用的&lt;code>callee&lt;/code>执行完成后，会继续执行&lt;code>caller&lt;/code>里的代码。而且，512B的限制会对&lt;code>caller callee&lt;/code>整体生效。如，下述的&lt;code>bpf2bpf call&lt;/code>是会报错的：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">struct event {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u32 pid; // 4B
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u8 line[256]; // 256B
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">};
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// linux-4.16以前，需要这样声明。4.16新增了真正意义上的函数调用而非inline处理。
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// static __always_inline void send_event(ctx) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">static void send_event(struct pt_regs *ctx) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct event event = {};
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> event.pid = bpf_get_current_pid_tgid();
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> event.line[0] = 49;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bpf_perf_event_output(ctx, &amp;amp;events, BPF_F_CURRENT_CPU, &amp;amp;event, sizeof(event));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SEC(&amp;#34;uretprobe/bash_readline&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">int uretprobe_bash_readline(struct pt_regs *ctx) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct event event = {};
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> event.pid = bpf_get_current_pid_tgid();
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> event.line[0] = 49;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> send_event(ctx); // 这里发起了一个bpf2bpf call
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> // 如果将line的长度调小，程序能够正常执行。send_event后会继续执行。
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bpf_perf_event_output(ctx, &amp;amp;events, BPF_F_CURRENT_CPU, &amp;amp;event, sizeof(event));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return 0;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这里算是笔者目前感知到的主要差异。&lt;code>tail calls&lt;/code>的特性在&lt;code>linux-4.2&lt;/code>的版本就上线了。在&lt;code>centos-8&lt;/code>版本的系统上运行没有问题。&lt;/p>
+&lt;h1 id="二tail-calls-的一个示例">
+&lt;a href="#%e4%ba%8ctail-calls-%e7%9a%84%e4%b8%80%e4%b8%aa%e7%a4%ba%e4%be%8b">#&lt;/a>
+二、tail calls 的一个示例
+&lt;/h1>&lt;p>这里附上执行效果和一段示例。笔者构建的场景是使用&lt;code>uretprobe/bash_readline&lt;/code>作为&lt;code>hook&lt;/code>点，依据返回字符串长度的奇偶性来触发不同的&lt;code>bpf function&lt;/code>，分别输出不同的事件。实现效果如下。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">$ sudo ./uretprobe
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">2023/08/26 14:34:39 Listening for events..
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">2023/08/26 14:34:45 /bin/bash:readline return value: ll
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">2023/08/26 14:34:45 get even event
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">2023/08/26 14:35:01 /bin/bash:readline return value: ls -l
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">2023/08/26 14:35:01 get odd event
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>bpf&lt;/code>代码为：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;span class="lnt">75
+&lt;/span>&lt;span class="lnt">76
+&lt;/span>&lt;span class="lnt">77
+&lt;/span>&lt;span class="lnt">78
+&lt;/span>&lt;span class="lnt">79
+&lt;/span>&lt;span class="lnt">80
+&lt;/span>&lt;span class="lnt">81
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="n">char&lt;/span> &lt;span class="n">__license&lt;/span>&lt;span class="p">[]&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;license&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;Dual MIT/GPL&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u32&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u8&lt;/span> &lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">256&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u8&lt;/span> &lt;span class="n">mark&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">type&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_MAP_TYPE_PERF_EVENT_ARRAY&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span> &lt;span class="n">events&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;.maps&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="n">Force&lt;/span> &lt;span class="n">emitting&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="n">into&lt;/span> &lt;span class="n">the&lt;/span> &lt;span class="n">ELF&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">const&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">unused&lt;/span> &lt;span class="n">__attribute__&lt;/span>&lt;span class="p">((&lt;/span>&lt;span class="n">unused&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">通过&lt;/span>&lt;span class="n">bpf&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">tail&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">call只能调用同类型的bpf函数&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;uretprobe/bash_readline_odd&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="ne">int&lt;/span> &lt;span class="n">uretprobe_bash_readline_odd&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">struct&lt;/span> &lt;span class="n">pt_regs&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">pid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_get_current_pid_tgid&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">49&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">5&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_perf_event_output&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">events&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_F_CURRENT_CPU&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">通过&lt;/span>&lt;span class="n">bpf&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">tail&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">call只能调用同类型的bpf函数&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;uretprobe/bash_readline_even&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="ne">int&lt;/span> &lt;span class="n">uretprobe_bash_readline_even&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">struct&lt;/span> &lt;span class="n">pt_regs&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">pid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_get_current_pid_tgid&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">8&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">50&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_perf_event_output&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">events&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_F_CURRENT_CPU&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">type&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_MAP_TYPE_PROG_ARRAY&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">key_size&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">u32&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">value_size&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">u32&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">max_entries&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1024&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__array&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">values&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="ne">int&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span> &lt;span class="n">tail_jmp_table&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;.maps&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">.&lt;/span>&lt;span class="n">values&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">这里的&lt;/span>&lt;span class="n">id是可以在用户态通过map&lt;/span> &lt;span class="n">update来更新的&lt;/span>&lt;span class="err">。由此可以延伸出其他有意思的功能。这里从实际需求直接固定值了。&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">[&lt;/span>&lt;span class="mi">135&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">uretprobe_bash_readline_odd&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">[&lt;/span>&lt;span class="mi">146&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">uretprobe_bash_readline_even&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">},&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;uretprobe/bash_readline&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="ne">int&lt;/span> &lt;span class="n">uretprobe_bash_readline&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">struct&lt;/span> &lt;span class="n">pt_regs&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">pid&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_get_current_pid_tgid&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_probe_read&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">PT_REGS_RC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">mark&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">3&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_perf_event_output&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">events&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_F_CURRENT_CPU&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u8&lt;/span> &lt;span class="n">line_length&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">line_length&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">line_length&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="mi">80&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">line_length&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">line_length&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">break&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">line_length&lt;/span> &lt;span class="o">%&lt;/span> &lt;span class="mi">2&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">偶数调用&lt;/span> &lt;span class="n">uretprobe_bash_readline_even&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_tail_call&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">tail_jmp_table&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">146&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>&lt;span class="k">else&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">奇数调用&lt;/span> &lt;span class="n">uretprobe_bash_readline_odd&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_tail_call&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">tail_jmp_table&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">135&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>以上。周末愉快～&lt;/p>
+&lt;h1 id="三参考文章">
+&lt;a href="#%e4%b8%89%e5%8f%82%e8%80%83%e6%96%87%e7%ab%a0">#&lt;/a>
+三、参考文章
+&lt;/h1>&lt;p>[1] &lt;a class="link" href="https://docs.cilium.io/en/latest/bpf/architecture/" target="_blank" rel="noopener"
+>BPF Architecture&lt;/a>&lt;br>
+[2] &lt;a class="link" href="https://man7.org/linux/man-pages/man7/bpf-helpers.7.html" target="_blank" rel="noopener"
+>bpf-helpers&lt;/a>&lt;br>
+[3] &lt;a class="link" href="https://mozillazg.com/2022/10/ebpf-libbpf-use-tail-calls.html" target="_blank" rel="noopener"
+>在 ebpf/libbpf 程序中使用尾调用（tail calls）&lt;/a>&lt;br>
+[4] &lt;a class="link" href="https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md" target="_blank" rel="noopener"
+>kernel version&lt;/a>&lt;/p></description></item></channel></rss>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Quic on 李岩</title><link>https://liyan-ah.github.io/tags/quic/</link><description>Recent content in Quic on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Tue, 09 Nov 2021 21:11:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/quic/index.xml" rel="self" type="application/rss+xml"/><item><title>Quic协议</title><link>https://liyan-ah.github.io/p/quic%E5%8D%8F%E8%AE%AE/</link><pubDate>Tue, 09 Nov 2021 21:11:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/quic%E5%8D%8F%E8%AE%AE/</guid><description>&lt;blockquote>
+&lt;p>Quic 协议作为应用层的协议，在无线、弱网场景下的移动通信领域有广阔的应用场景。本文简单记录一些 Quic 的知识点，同时附上介绍的详细文章；&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="quic-协议">
+&lt;a href="#quic-%e5%8d%8f%e8%ae%ae">#&lt;/a>
+Quic 协议
+&lt;/h1>&lt;p>&lt;code>Quic&lt;/code>协议是应用层（5层网络模型下，由于基于传输层协议，笔者倾向于认为其是&lt;code>应用层协议&lt;/code>，但是博文中多次标注其是&lt;code>传输层协议&lt;/code>），对标 &lt;code>HTTP&lt;/code> 协议，基于 &lt;code>UDP&lt;/code> 协议构建。&lt;/p>
+&lt;h1 id="quic-协议优点">
+&lt;a href="#quic-%e5%8d%8f%e8%ae%ae%e4%bc%98%e7%82%b9">#&lt;/a>
+Quic 协议优点
+&lt;/h1>&lt;ul>
+&lt;li>建立连接延时低。相对于 HTTP 协议的至少 3RTT 的建联，Quic 协议可以实现 0RTT 建联；&lt;/li>
+&lt;li>改进了拥塞控制。将拥塞控制算法的选择交由应用程序控制；同时抛弃了基于 TCP 的 &lt;code>seq&lt;/code> 标记，改由严格递增的 &lt;code>package number&lt;/code> + &lt;code>offset&lt;/code>，优化了拥塞时的重传；
+&lt;ul>
+&lt;li>举例，需要传递 &lt;code>N,N+1,N+2&lt;/code> 三个包，传递过程中，&lt;code>N&lt;/code> 丢失了；&lt;code>TCP&lt;/code>的重传会将&lt;code>N,N+1,N+2&lt;/code>三个包都重传；&lt;code>Quic&lt;/code> 会重传一个 &lt;code>N+3&lt;/code>（即&lt;code>package_num&lt;/code>+1），但是 &lt;code>offset&lt;/code> 记为 &lt;code>0&lt;/code>（即&lt;code>stream_offset&lt;/code>不变）。这样在另一端将三个包按照 &lt;code>offset&lt;/code> 重新进行组织；&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>基于 &lt;code>Connection&lt;/code> 及 &lt;code>Stream&lt;/code> 进行多路复用；&lt;/li>
+&lt;li>消除队头阻塞，更好的支持多路复用，处理多个会话时，不会因为其中一个会话的丢失，导致其他会话结果也重传(TCP消息重传逻辑)；&lt;/li>
+&lt;li>默认支持加密认证；&lt;/li>
+&lt;/ul>
+&lt;h1 id="总结">
+&lt;a href="#%e6%80%bb%e7%bb%93">#&lt;/a>
+总结
+&lt;/h1>&lt;p>&lt;code>Quic&lt;/code> 协议相当于在 &lt;code>UDP&lt;/code> 的基础上，在更高层次协议上实现了 &lt;code>TCP&lt;/code> 的大部分功能：可靠传输，拥塞控制等，同时对 &lt;code>TCP&lt;/code> 的这些功能进行了优化；&lt;/p>
+&lt;h1 id="参考文献">
+&lt;a href="#%e5%8f%82%e8%80%83%e6%96%87%e7%8c%ae">#&lt;/a>
+参考文献
+&lt;/h1>&lt;p>&lt;a class="link" href="http://www.52im.net/thread-1309-1-1.html" target="_blank" rel="noopener"
+>技术扫盲：新一代基于UDP的低延时网络传输层协议——QUIC详解&lt;/a>&lt;/p></description></item></channel></rss>

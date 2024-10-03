@@ -1,0 +1,663 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content="译文整理，转载。"><title>【译文/effective-rust】第 28 条：在合适的时候使用宏</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-28-%E6%9D%A1%E5%9C%A8%E5%90%88%E9%80%82%E7%9A%84%E6%97%B6%E5%80%99%E4%BD%BF%E7%94%A8%E5%AE%8F/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="【译文/effective-rust】第 28 条：在合适的时候使用宏"><meta property='og:description' content="译文整理，转载。"><meta property='og:url' content='https://liyan-ah.github.io/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-28-%E6%9D%A1%E5%9C%A8%E5%90%88%E9%80%82%E7%9A%84%E6%97%B6%E5%80%99%E4%BD%BF%E7%94%A8%E5%AE%8F/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='译文'><meta property='article:tag' content='effective-rust'><meta property='article:published_time' content='2024-07-29T14:59:31+08:00'><meta property='article:modified_time' content='2024-07-29T14:59:31+08:00'><meta name=twitter:title content="【译文/effective-rust】第 28 条：在合适的时候使用宏"><meta name=twitter:description content="译文整理，转载。"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><aside class="sidebar right-sidebar sticky"><section class="widget archives"><div class=widget-icon><svg class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><line x1="11" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="13" y2="20"/></svg></div><h2 class="widget-title section-title">目录</h2><div class=widget--toc><nav id=TableOfContents><ol><li><a href=#声明宏>声明宏</a></li><li><a href=#格式化参数>格式化参数</a></li><li><a href=#过程宏>过程宏</a><ol><li><a href=#类函数宏>类函数宏</a></li><li><a href=#类属性宏>类属性宏</a></li><li><a href=#派生宏>派生宏</a></li></ol></li><li><a href=#什么时候使用宏>什么时候使用宏</a></li><li><a href=#宏的缺点>宏的缺点</a></li><li><a href=#建议>建议</a><ol><li><a href=#注释>注释</a></li></ol></li></ol></nav></div></section></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/%E7%A8%8B%E5%BA%8F%E4%BA%BA%E7%94%9F/ style=background-color:#2a9d8f;color:#fff>程序人生</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-28-%E6%9D%A1%E5%9C%A8%E5%90%88%E9%80%82%E7%9A%84%E6%97%B6%E5%80%99%E4%BD%BF%E7%94%A8%E5%AE%8F/>【译文/effective-rust】第 28 条：在合适的时候使用宏</a></h2><h3 class=article-subtitle>译文整理，转载。</h3></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jul 29, 2024</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 17 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>原文由笔者翻译并提交至 [rustx-labs/effective-rust-cn/item28]，同步转载到此处。最近一直在搞翻译了，从中看到了很多自己的不足。比如本文关于宏的内容，实际上还有很多没有弄明白的。过了这段时间再看看是否能整理下。</p></blockquote><blockquote><p>“在一些场景下，我们会很容易来决定应该使用宏（macro）而非函数（function），因为只有宏才能满足我们的需求。” - Paul Graham，“<a class=link href=https://www.paulgraham.com/onlisp.html target=_blank rel=noopener>On Lisp (Prentice Hall)</a>”</p></blockquote><p>Rust 的宏能够让你实现元编程（metaprogramming）：在项目中使用代码来生成代码。这一特性在需要编写很多确定性、重复性都很强的“样板代码”时会很有用，不借助宏的话我们就只能手动维护这些代码了。</p><p>程序员接触 Rust 之前可能已经预先了解了 C/C++ 中通过预处理（preprocessor）来实现的宏，这种方式是在预处理阶段通过文本替换来展开宏定义。而 Rust 的宏则有一些不同，它是在符号流（parsed tokens of the program）或者在抽象语法树（abstract syntax tree, AST）的基础上实现的宏，而非在文本处理阶段。</p><p>这就意味着 Rust 的宏是能够理解代码结构并且规避掉一系列的文本替换方式实现的宏所存在的意外情况。比如说，在接下来的内容中，我们可以看到 Rust 所声明的宏是<a class=link href=https://en.wikipedia.org/wiki/Hygienic_macro target=_blank rel=noopener>卫生的</a> —— 在宏里不会意外引用（或者捕获）宏所嵌入代码中的变量信息。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-c data-lang=c><span class=line><span class=cl><span class=cm>/* 这段内容较为晦涩。引用一段维基百科上的内容来说明文本替换方式实现的宏所带来的问题。*/</span>
+</span></span><span class=line><span class=cl><span class=cp>#define INCI(i) { int a=0; ++i; }
+</span></span></span><span class=line><span class=cl><span class=cp></span><span class=kt>int</span> <span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=kt>int</span> <span class=n>a</span> <span class=o>=</span> <span class=mi>4</span><span class=p>,</span> <span class=n>b</span> <span class=o>=</span> <span class=mi>8</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=nf>INCI</span><span class=p>(</span><span class=n>a</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=nf>INCI</span><span class=p>(</span><span class=n>b</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;a is now %d, b is now %d</span><span class=se>\n</span><span class=s>&#34;</span><span class=p>,</span> <span class=n>a</span><span class=p>,</span> <span class=n>b</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=cm>/* 以上代码中的 INCI 宏期望分别对 a, b 进行加一操作。文本替换后的结果如下所示。*/</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kt>int</span> <span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=kt>int</span> <span class=n>a</span> <span class=o>=</span> <span class=mi>4</span><span class=p>,</span> <span class=n>b</span> <span class=o>=</span> <span class=mi>8</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>{</span> <span class=kt>int</span> <span class=n>a</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span> <span class=o>++</span><span class=n>a</span><span class=p>;</span> <span class=p>};</span> <span class=c1>// 注意这里对 a 进行了重新声明，实际上是对声明的这个 a 进行了自增。
+</span></span></span><span class=line><span class=cl><span class=c1></span>    <span class=p>{</span> <span class=kt>int</span> <span class=n>a</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span> <span class=o>++</span><span class=n>b</span><span class=p>;</span> <span class=p>};</span> 
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;a is now %d, b is now %d</span><span class=se>\n</span><span class=s>&#34;</span><span class=p>,</span> <span class=n>a</span><span class=p>,</span> <span class=n>b</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=cm>/* 最终的结果会输出如下。 
+</span></span></span><span class=line><span class=cl><span class=cm> *
+</span></span></span><span class=line><span class=cl><span class=cm> * a is now 4, b is now 9
+</span></span></span><span class=line><span class=cl><span class=cm> *
+</span></span></span><span class=line><span class=cl><span class=cm> * 这显然是不符合预期的。产生这一结果的原因是由于文本替换过于粗暴，而无法进行实际语意上的理解。
+</span></span></span><span class=line><span class=cl><span class=cm> *
+</span></span></span><span class=line><span class=cl><span class=cm> * 本注释内容为译者添加。
+</span></span></span><span class=line><span class=cl><span class=cm> */</span>
+</span></span></code></pre></td></tr></table></div></div><p>一种理解宏的方法是将其视为代码的不同抽象方式。函数也是代码的一种简单抽象：它将同一类型的不同值的不同抽象出来，实现了针对这一类型，而非特定的值，会做的操作及方法。而宏中的生成则是另外一个层面的抽象：宏是对符合同一特性的不同类型进行抽象，使用针对这些不同类型所具备的相同特性，而非特性的类型，进行代码的实现。</p><p>宏可以对不同程序中扮演相同角色（类型、标记、表达式等）的代码抽象出来，然后这些程序就可以以同一种方式来使用抽象出的逻辑。</p><p>Rust 提供了两种方式来定义宏：</p><ul><li>声明宏，也被成为“示例宏”。声明宏允许将输入到宏中任意的 Rust 程序，基于抽象语法树中的结果，集成到代码中。</li><li>过程宏。过程宏同样可以将任意的 Rust 程序集成到代码中，不过是基于源码中的解析符号。<code>derive</code>宏就是常见的过程宏。<code>derive</code>宏可以基于代码的结构定义来展开代码。</li></ul><h2 id=声明宏><a href=#%e5%a3%b0%e6%98%8e%e5%ae%8f>#</a>
+声明宏</h2><p>虽然这篇文章不是为了重复<a class=link href=https://doc.rust-lang.org/reference/macros-by-example.html target=_blank rel=noopener>声明宏</a>的内容，但还是有必要来提醒下声明宏中需要关注的内容。</p><p>首先，需要注意的是声明宏的作用域范围和直觉上的理解的是不同的（对比 C 里的预处理宏）。如果一个声明宏在源代码中被定义了，就只有<em>跟在</em>宏里的代码能够使用：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>fn</span> <span class=nf>before</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;[before] square </span><span class=si>{}</span><span class=s> is </span><span class=si>{}</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=fm>square!</span><span class=p>(</span><span class=mi>2</span><span class=p>));</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=sd>/// Macro that squares its argument.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>square</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span>:<span class=nc>expr</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span><span class=w> </span><span class=o>*</span><span class=w> </span><span class=cp>$e</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>after</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;[after] square </span><span class=si>{}</span><span class=s> is </span><span class=si>{}</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=fm>square!</span><span class=p>(</span><span class=mi>2</span><span class=p>));</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>error</span>: <span class=nc>cannot</span><span class=w> </span><span class=n>find</span><span class=w> </span><span class=kr>macro</span><span class=w> </span><span class=err>`</span><span class=n>square</span><span class=err>`</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>this</span><span class=w> </span><span class=n>scope</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w> </span><span class=o>-</span>-&gt; <span class=nc>src</span><span class=o>/</span><span class=n>main</span><span class=p>.</span><span class=n>rs</span>:<span class=mi>4</span>:<span class=mi>45</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=o>|</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=mi>4</span><span class=w> </span><span class=o>|</span><span class=w>     </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;[before] square </span><span class=si>{}</span><span class=s> is </span><span class=si>{}</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=fm>square!</span><span class=p>(</span><span class=mi>2</span><span class=p>));</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=o>|</span><span class=w>                                             </span><span class=o>^^^^^^</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=o>|</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=o>=</span><span class=w> </span><span class=n>help</span>: <span class=nc>have</span><span class=w> </span><span class=n>you</span><span class=w> </span><span class=n>added</span><span class=w> </span><span class=n>the</span><span class=w> </span><span class=err>`</span><span class=cp>#[macro_use]</span><span class=err>`</span><span class=w> </span><span class=n>on</span><span class=w> </span><span class=n>the</span><span class=w> </span><span class=n>module</span><span class=o>/</span><span class=n>import</span><span class=o>?</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p><code>#[macro_export]</code>特性让宏可以访问更多的数据，但是也存在一些奇怪的事情：尽管宏并没有在模块中定义，它还是出现在了模块的顶层。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>mod</span> <span class=nn>submod</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=cp>#[macro_export]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>cube</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span>:<span class=nc>expr</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span><span class=w> </span><span class=o>*</span><span class=w> </span><span class=cp>$e</span><span class=w> </span><span class=o>*</span><span class=w> </span><span class=cp>$e</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>mod</span> <span class=nn>user</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=k>pub</span><span class=w> </span><span class=k>fn</span> <span class=nf>use_macro</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=c1>// Note: *not* `crate::submod::cube!`
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>        </span><span class=kd>let</span><span class=w> </span><span class=n>cubed</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=k>crate</span>::<span class=fm>cube!</span><span class=p>(</span><span class=mi>3</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;cube </span><span class=si>{}</span><span class=s> is </span><span class=si>{}</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=mi>3</span><span class=p>,</span><span class=w> </span><span class=n>cubed</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>Rust 的声明宏是卫生（hygienic）的：宏内部展开的代码无法使用所在作用域的局部变量。比如，宏内部使用了局部变量 x 时：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=c1>// Create a macro that assumes the existence of a local `x`.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>increment_x</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=mi>1</span><span class=p>;</span><span class=w> </span><span class=p>};</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>这样的用法将会造成编译错误：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>2</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>increment_x!</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;x = </span><span class=si>{}</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=n>x</span><span class=p>);</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>error</span><span class=p>[</span><span class=n>E0425</span><span class=p>]</span>: <span class=nc>cannot</span><span class=w> </span><span class=n>find</span><span class=w> </span><span class=n>value</span><span class=w> </span><span class=err>`</span><span class=n>x</span><span class=err>`</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>this</span><span class=w> </span><span class=n>scope</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>   </span><span class=o>-</span>-&gt; <span class=nc>src</span><span class=o>/</span><span class=n>main</span><span class=p>.</span><span class=n>rs</span>:<span class=mi>55</span>:<span class=mi>13</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=o>|</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=mi>55</span><span class=w>  </span><span class=o>|</span><span class=w>     </span><span class=p>{}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=mi>1</span><span class=p>;</span><span class=w> </span><span class=p>};</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=o>|</span><span class=w>             </span><span class=o>^</span><span class=w> </span><span class=n>not</span><span class=w> </span><span class=n>found</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>this</span><span class=w> </span><span class=n>scope</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=o>..</span><span class=p>.</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=mi>314</span><span class=w> </span><span class=o>|</span><span class=w>     </span><span class=fm>increment_x!</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=o>|</span><span class=w>     </span><span class=o>--------------</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>this</span><span class=w> </span><span class=kr>macro</span><span class=w> </span><span class=n>invocation</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=o>|</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=o>=</span><span class=w> </span><span class=n>note</span>: <span class=nc>this</span><span class=w> </span><span class=n>error</span><span class=w> </span><span class=n>originates</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>the</span><span class=w> </span><span class=kr>macro</span><span class=w> </span><span class=err>`</span><span class=n>increment_x</span><span class=err>`</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>这种“卫生”的特性意味着 Rust 的宏比 C 的基于预处理替换的宏要安全很多。然而，仍有一些需要在使用时注意的内容。</p><p>第一，尽管一个宏<em>看起来</em>很像是函数的声明，它并不是。宏将会在调用的地方进行代码展开，而且可以随着传入参数的不同进行不同形式的展开：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>inc_item</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$x</span>:<span class=nc>ident</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=cp>$x</span><span class=p>.</span><span class=n>contents</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=mi>1</span><span class=p>;</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>这就意味着常规意义上的参数被移动（moved）或者 & （被引用）的情形没有发生：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>Item</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>contents</span>: <span class=mi>42</span><span class=w> </span><span class=p>};</span><span class=w> </span><span class=c1>// type is not `Copy`
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// Item is *not* moved, despite the (x) syntax,
+</span></span></span><span class=line><span class=cl><span class=c1>// but the body of the macro *can* modify `x`.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=fm>inc_item!</span><span class=p>(</span><span class=n>x</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;x is </span><span class=si>{x:?}</span><span class=s>&#34;</span><span class=p>);</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>x</span><span class=w> </span><span class=n>is</span><span class=w> </span><span class=n>Item</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>contents</span>: <span class=mi>43</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>如果我们还记得宏只是在调用它的地方进行展开的话，上述示例就会变得清楚了 —— 在这个示例中，调用宏的地方只相当于添加了一行增加<code>x.contents</code>值的代码。借助<a class=link href=https://github.com/dtolnay/cargo-expand target=_blank rel=noopener>cargo-expand</a>可以很清晰地看到编译器将宏进行展开后的代码：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>Item</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>contents</span>: <span class=mi>42</span><span class=w> </span><span class=p>};</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=n>x</span><span class=p>.</span><span class=n>contents</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=mi>1</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span>::<span class=n>std</span>::<span class=n>io</span>::<span class=n>_print</span><span class=p>(</span><span class=fm>format_args!</span><span class=p>(</span><span class=s>&#34;x is </span><span class=si>{0:?}</span><span class=se>\n</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=n>x</span><span class=p>));</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>};</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>展开的代码中可以看到直接使用了变量本身，而非其引用。（一个有意思的事情是，我们可以看到<code>println!</code>的展开中，依赖了<code>format_args!</code>宏<sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup>。）</p><p>所以，宏里的<code>!</code>起到了一个警示的作用：展开的代码可能会对参数做一些任性的事情。</p><p>展开的代码也可能会包含一些在调用代码中无法访问的控制流，可能包括循环、判断、返回值甚至使用<code>?</code>操作符。显然，这里会和[最小惊讶原则]相冲突，所以在使用宏时，应当考虑封装常规的 Rust 语句。（另一方面，如果使用宏的<em>目的</em>是实现一些奇怪的控制流，请确保这些控制流在文档中都给用户提供了！）</p><p>举例来说，考虑这样一个宏（用来校验 HTTP 状态码）包含了一个<code>return</code>语句：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=sd>/// Check that an HTTP status is successful; exit function if not.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>check_successful</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span>:<span class=nc>expr</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=k>if</span><span class=w> </span><span class=cp>$e</span><span class=p>.</span><span class=n>group</span><span class=p>()</span><span class=w> </span><span class=o>!=</span><span class=w> </span><span class=n>Group</span>::<span class=n>Successful</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>return</span><span class=w> </span><span class=nb>Err</span><span class=p>(</span><span class=n>MyError</span><span class=p>(</span><span class=s>&#34;HTTP operation failed&#34;</span><span class=p>));</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>用这段宏来校验一些 HTTP 行为的代码可能会以一些很晦涩的控制流来结束：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=n>rc</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>perform_http_operation</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>check_successful!</span><span class=p>(</span><span class=n>rc</span><span class=p>);</span><span class=w> </span><span class=c1>// may silently exit the function
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// ...
+</span></span></span></code></pre></td></tr></table></div></div><p>另一种可以实现上述功能的宏是产生一个<code>Result</code>：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span><span class=lnt>9
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=sd>/// Convert an HTTP status into a `Result&lt;(), MyError&gt;` indicating success.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>check_success</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span>:<span class=nc>expr</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=k>match</span><span class=w> </span><span class=cp>$e</span><span class=p>.</span><span class=n>group</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=n>Group</span>::<span class=n>Successful</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=nb>Ok</span><span class=p>(()),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=n>_</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=nb>Err</span><span class=p>(</span><span class=n>MyError</span><span class=p>(</span><span class=s>&#34;HTTP operation failed&#34;</span><span class=p>)),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>而这样依赖，代码就很好理解了：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=n>rc</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>perform_http_operation</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>check_success!</span><span class=p>(</span><span class=n>rc</span><span class=p>)</span><span class=o>?</span><span class=p>;</span><span class=w> </span><span class=c1>// error flow is visible via `?`
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// ...
+</span></span></span></code></pre></td></tr></table></div></div><p>对于声明宏来说，第二件需要注意的事情是和 C 的预编译宏同样的问题：如果宏的参数是一个存在副作用的表达式，当心在宏里多次使用的情况。比如我们在早先定义的<code>square!</code>宏输入了较为随意的表达式来作为参数，然后使用两次，这将会造成奇怪的结果：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>1</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=kd>let</span><span class=w> </span><span class=n>y</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=fm>square!</span><span class=p>({</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>x</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=mi>1</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>x</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>});</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;x = </span><span class=si>{x}</span><span class=s>, y = </span><span class=si>{y}</span><span class=s>&#34;</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// output: x = 3, y = 6
+</span></span></span></code></pre></td></tr></table></div></div><p>假设这种行为并非有意的，一种修复的方法是尝试仅执行给定的表达式一次，然后将结果赋值给一个本地的变量：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span><span class=lnt>9
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>square_once</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span>:<span class=nc>expr</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=kd>let</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=cp>$e</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=n>x</span><span class=o>*</span><span class=n>x</span><span class=w> </span><span class=c1>// Note: there&#39;s a detail here to be explained later...
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// output now: x = 2, y = 4
+</span></span></span></code></pre></td></tr></table></div></div><p>另一种可选的方案是不允许将表达式作为宏的输入。如果将[expr]替换为<code>indent</code>，那么这个宏就仅会接受标志符作为入参，而使用类似任意的表达式将不再能编译通过。</p><h2 id=格式化参数><a href=#%e6%a0%bc%e5%bc%8f%e5%8c%96%e5%8f%82%e6%95%b0>#</a>
+格式化参数</h2><p>声明宏的一种常见的使用模式将多个值汇聚成一个消息。比如，标准库中的<code>format!</code>用来拼接一个字符串，<code>println!</code>用来输出到标准输出，<code>eprintln!</code>用来输出到标准错误输出。<a class=link href=https://doc.rust-lang.org/std/fmt/index.html target=_blank rel=noopener>fmt 文档</a>中阐述了<code>format!</code>的语法，和<code>C</code>中的<code>printf</code>使用几乎是相同的。当然，Rust 中的<code>format!</code>参数是类型安全并且会在编译时进行检查的，并且<code>format!</code>宏实现时使用了<code>Display</code>以及<code>Debug</code>特性用来约束宏的参数。<code>Display</code>以及<code>Debug</code>宏的使用参见[第 10 条]<sup id=fnref:2><a href=#fn:2 class=footnote-ref role=doc-noteref>2</a></sup>。</p><p>你可以（同时也建议）在项目中的宏中使用相同的格式化语法。比如，一个<code>log</code>库中的<code>logging</code>宏就可以使用和<code>format!</code>相同的语法。在实践中，使用<code>format_args!</code>来实现参数的格式化而不是重复造轮子。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=sd>/// Log an error including code location, with `format!`-like arguments.
+</span></span></span><span class=line><span class=cl><span class=sd>/// Real code would probably use the `log` crate.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>my_log</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$($arg</span>:<span class=nc>tt</span><span class=p>)</span><span class=o>+</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=fm>eprintln!</span><span class=p>(</span><span class=s>&#34;</span><span class=si>{}</span><span class=s>:</span><span class=si>{}</span><span class=s>: </span><span class=si>{}</span><span class=s>&#34;</span><span class=p>,</span><span class=w> </span><span class=fm>file!</span><span class=p>(),</span><span class=w> </span><span class=fm>line!</span><span class=p>(),</span><span class=w> </span><span class=fm>format_args!</span><span class=p>(</span><span class=cp>$($arg</span><span class=p>)</span><span class=o>+</span><span class=p>));</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>10</span><span class=k>u8</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// Format specifiers:
+</span></span></span><span class=line><span class=cl><span class=c1>// - `x` says print as hex
+</span></span></span><span class=line><span class=cl><span class=c1>// - `#` says prefix with &#39;0x&#39;
+</span></span></span><span class=line><span class=cl><span class=c1>// - `04` says add leading zeroes so width is at least 4
+</span></span></span><span class=line><span class=cl><span class=c1>//   (this includes the &#39;0x&#39; prefix).
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=fm>my_log!</span><span class=p>(</span><span class=s>&#34;x = {:#04x}&#34;</span><span class=p>,</span><span class=w> </span><span class=n>x</span><span class=p>);</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>src</span><span class=o>/</span><span class=n>main</span><span class=p>.</span><span class=n>rs</span>:<span class=mi>331</span>: <span class=nc>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mh>0x0a</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><h2 id=过程宏><a href=#%e8%bf%87%e7%a8%8b%e5%ae%8f>#</a>
+过程宏</h2><p>Rust 也支持了<em>过程宏</em>，也被称为<code>proc macros</code>。和声明宏类似，<a class=link href=https://doc.rust-lang.org/reference/procedural-macros.html target=_blank rel=noopener>过程宏</a>能够任意的 Rust 代码插入到程序的源代码中。不同的时，过程宏的输入不再仅限制在特定的传入参数。过程宏可以访问一些源代码中的解析符号（parsed tokens）。这就过程宏一定程度上类似动态语言，比如 Lisp，的非常富有表达力的能力 —— 但是仍然在编译时进行检查。这也帮助缓解了 Rust 中反射的局限，这在<a class=link href=https://www.lurklurk.org/effective-rust/reflection.html target=_blank rel=noopener>第 19 条</a>中讨论了。</p><p>过程宏需要和其被使用的代码定义在不同的包中（并且包需要被声明为<code>proc_macro</code>），并且包中往往需要引入[proc-macro]（官方工具链中提供）或者[proc-macro2]（由 David Tolnay 提供）的依赖，这两个依赖可以宏能够操作输入的符号。</p><p>实际上，有三种不同的过程宏：</p><ul><li>类函数宏（Function-like macros）：通过传入的参数调用。</li><li>类属性宏（Attribute macros）：附加到程序中的某些特定语法的代码中。</li><li>派生宏（Derive macros）：附加到特定的数据结构中。</li></ul><h3 id=类函数宏><a href=#%e7%b1%bb%e5%87%bd%e6%95%b0%e5%ae%8f>#</a>
+类函数宏</h3><p>函数式的宏会通过传递参数来调用，宏的实现中可以访问参数的解析符号（parsed tokens），并且返回任意的符号。注意在先前的表述中，我们使用的是单数的参数， —— 即使函数式的宏调用的时候看起来传入了很多参数：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=fm>my_func_macro!</span><span class=p>(</span><span class=mi>15</span><span class=p>,</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=n>y</span><span class=p>,</span><span class=w> </span><span class=kt>f32</span>::<span class=n>consts</span>::<span class=no>PI</span><span class=p>);</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>但是宏本身只接收到了一个解析后的符号流。一个将符号流输出（在编译时）的宏实现示例如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>use</span><span class=w> </span><span class=n>proc_macro</span>::<span class=n>TokenStream</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// Function-like macro that just prints (at compile time) its input stream.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=cp>#[proc_macro]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>pub</span><span class=w> </span><span class=k>fn</span> <span class=nf>my_func_macro</span><span class=p>(</span><span class=n>args</span>: <span class=nc>TokenStream</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>TokenStream</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;Input TokenStream is:&#34;</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=k>for</span><span class=w> </span><span class=n>tt</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>args</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;  </span><span class=si>{tt:?}</span><span class=s>&#34;</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c1>// Return an empty token stream to replace the macro invocation with.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=n>TokenStream</span>::<span class=n>new</span><span class=p>()</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>其运行结果如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>Input</span><span class=w> </span><span class=n>TokenStream</span><span class=w> </span><span class=n>is</span>:
+</span></span><span class=line><span class=cl>  <span class=nc>Literal</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>kind</span>: <span class=nc>Integer</span><span class=p>,</span><span class=w> </span><span class=n>symbol</span>: <span class=s>&#34;15&#34;</span><span class=p>,</span><span class=w> </span><span class=n>suffix</span>: <span class=nb>None</span><span class=p>,</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10976</span><span class=o>..</span><span class=mi>10978</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span><span class=p>,</span><span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Alone</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10978</span><span class=o>..</span><span class=mi>10979</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Ident</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ident</span>: <span class=s>&#34;x&#34;</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10980</span><span class=o>..</span><span class=mi>10981</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span><span class=o>+</span><span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Alone</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10982</span><span class=o>..</span><span class=mi>10983</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Ident</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ident</span>: <span class=s>&#34;y&#34;</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10984</span><span class=o>..</span><span class=mi>10985</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span><span class=p>,</span><span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Alone</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10985</span><span class=o>..</span><span class=mi>10986</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Ident</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ident</span>: <span class=s>&#34;f32&#34;</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10987</span><span class=o>..</span><span class=mi>10990</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span>:<span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Joint</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10990</span><span class=o>..</span><span class=mi>10991</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span>:<span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Alone</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10991</span><span class=o>..</span><span class=mi>10992</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Ident</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ident</span>: <span class=s>&#34;consts&#34;</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10992</span><span class=o>..</span><span class=mi>10998</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span>:<span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Joint</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10998</span><span class=o>..</span><span class=mi>10999</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Punct</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ch</span>: <span class=na>&#39;</span>:<span class=na>&#39;</span><span class=p>,</span><span class=w> </span><span class=n>spacing</span>: <span class=nc>Alone</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>10999</span><span class=o>..</span><span class=mi>11000</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>Ident</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>ident</span>: <span class=s>&#34;PI&#34;</span><span class=p>,</span><span class=w> </span><span class=n>span</span>: #<span class=mi>0</span><span class=w> </span><span class=n>bytes</span><span class=p>(</span><span class=mi>11000</span><span class=o>..</span><span class=mi>11002</span><span class=p>)</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>由于输入流涉及到的底层特性式的这段宏在实现时必须要能够解析所传入的参数。比如，宏中分隔那些需要分隔的参数需要使用<code>TokenTree:Punct</code>。<a class=link href=https://docs.rs/syn/latest/syn/ target=_blank rel=noopener>syn 包</a>（David Tolnay开发）提供了一个解析的库来辅助这些事情，下一节会进行介绍。</p><p>正因为这些解析的工作，使用声明宏往往比函数式的过程宏要简单，因为声明宏所处理的是匹配所定义的结构。</p><p>这种需要手动处理繁杂的另一面是函数是的宏可以更加灵活的接受那些无法像一般 Rust 代码解析的输入。这种特性并非经常需要的，所以函数式的宏相对较少出现。</p><h3 id=类属性宏><a href=#%e7%b1%bb%e5%b1%9e%e6%80%a7%e5%ae%8f>#</a>
+类属性宏</h3><p>类属性宏通过将其放置在程序的一些片段前调用的，而这些片段的解析符号会被传入到宏的内部进行处理。类属性宏也可以将任意的结果作为返回值，但是一般返回值是对输出的一些转换处理。</p><p>比如，下面是一个用来封装函数体的类属性宏：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=cp>#[log_invocation]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>add_three</span><span class=p>(</span><span class=n>x</span>: <span class=kt>u32</span><span class=p>)</span><span class=w> </span>-&gt; <span class=kt>u32</span> <span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>x</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>3</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>之后，在调用这个被封装的函数时，就会有日志输出：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=kd>let</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>2</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=kd>let</span><span class=w> </span><span class=n>y</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>add_three</span><span class=p>(</span><span class=n>x</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;add_three(</span><span class=si>{x}</span><span class=s>) = </span><span class=si>{y}</span><span class=s>&#34;</span><span class=p>);</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>log</span>: <span class=nc>calling</span><span class=w> </span><span class=n>function</span><span class=w> </span><span class=na>&#39;add_three&#39;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=n>log</span>: <span class=nc>called</span><span class=w> </span><span class=n>function</span><span class=w> </span><span class=na>&#39;add_three&#39;</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=mi>5</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=n>add_three</span><span class=p>(</span><span class=mi>2</span><span class=p>)</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>5</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>这个宏的实现是极为复杂的，这里并不打算将其细节附上。在实现时，需要校验输入符号的结构以便构建新的输出符号。当然，这一过程仍然可以使用<code>syn</code>包来辅助实现。</p><h3 id=派生宏><a href=#%e6%b4%be%e7%94%9f%e5%ae%8f>#</a>
+派生宏</h3><p>最后一种过程宏是派生宏。派生宏可以为其修饰的数据（struct, enum 或者 union 均可）自动地生成代码。这一点和类属性宏有些像，但是会多一些派生的操作 —— 请注意理解这里的派生概念。</p><p>首先，派生宏会附加到输入的符号中，而非将其替换。这就意味着原始的数据结构的定义会被保留，而派生宏将在原始数据结构的基础上附加代码。</p><p>其次，派生宏可以用来声明一些辅助性的特征。当数据需要用作一些特殊的处理时，可以使用派生宏来辅助标注。比如，[serde 库]的<a class=link href=https://docs.rs/serde/latest/serde/derive.Deserialize.html target=_blank rel=noopener>Deserialize</a>派生宏有一个<code>serde</code>的辅助特性，用户可以使用派生宏来声明这些结构体符合某种特性：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>fn</span> <span class=nf>generate_value</span><span class=p>()</span><span class=w> </span>-&gt; <span class=nb>String</span> <span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=s>&#34;unknown&#34;</span><span class=p>.</span><span class=n>to_string</span><span class=p>()</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=cp>#[derive(Debug, Deserialize)]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>struct</span> <span class=nc>MyData</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c1>// If `value` is missing when deserializing, invoke
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=c1>// `generate_value()` to populate the field instead.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=cp>#[serde(default = </span><span class=s>&#34;generate_value&#34;</span><span class=cp>)]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>value</span>: <span class=nb>String</span><span class=p>,</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>关于派生宏的最后一个概念是，<a class=link href=https://docs.rs/syn/latest/syn/ target=_blank rel=noopener>syn 包</a>可以完成将输入符号解析到相应的语法树的工作。<a class=link href=https://docs.rs/syn/latest/syn/macro.parse_macro_input.html target=_blank rel=noopener>syn::parse_macro_input!</a>宏可以将符号转换成<a class=link href=https://docs.rs/syn/latest/syn/struct.DeriveInput.html target=_blank rel=noopener>syn::DeriveInput</a>数据结构，这种结构描述被修饰对象的主要内容，并且<code>DeriveInput</code>操作起来远比原始的符号流要好处理。</p><p>特别地，<code>derive</code>宏是所有过程宏中最常使用的宏 —— 这种逐字段或逐变量操作的能力能够让程序员最简单地实现最多的功能 —— 比如，仅通过添加一行类似<code>#[derive(Debug, Clone, PartialEq, Eq)]</code>的代码，即可实现预期的目的。</p><p>由于派生宏的代码插入是自动实现地，这也意味着这些插入的代码可以同时和结构体的实现保持一致。比如，如果你向<code>struct</code>中插入了一个新的字段，如果采用手动实现<code>Debug</code>特征的话，你就需要在插入后对结构体进行更新以使其满足特征的需求。而对于自动插入代码的派生宏来说，你并不需要做任何调整（当然了，如果插入的字段不满足派生宏的实现要求，编译时会报错）。</p><h2 id=什么时候使用宏><a href=#%e4%bb%80%e4%b9%88%e6%97%b6%e5%80%99%e4%bd%bf%e7%94%a8%e5%ae%8f>#</a>
+什么时候使用宏</h2><p>使用宏的首要原因当然是避免重复的代码 —— 尤其是那些需要人工确保和其他代码关联正确性的重复代码。从这一点来说，使用宏仅是编程常用的封装抽象的扩展：</p><ul><li>如果需要重复一段处理同一类型的不同值的代码，将其封装为一个函数并在所有需要这段逻辑的地方使用它。</li><li>如果需要重复一段处理不同类型的代码，构建一个<code>trait</code>并且使用该<code>trait</code>来封装逻辑并在所有满足该特性的要求的地方进行使用。</li><li>如果需要重复一段结构相同的代码，将其封装成一个宏并且在所有满足类似结构的代码中进行使用。</li></ul><p>举例如下：如果希望规避重复处理不同<code>enum</code>的代码，使用宏即可：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>enum</span> <span class=nc>Multi</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>Byte</span><span class=p>(</span><span class=kt>u8</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>Int</span><span class=p>(</span><span class=kt>i32</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>Str</span><span class=p>(</span><span class=nb>String</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=sd>/// Extract copies of all the values of a specific enum variant.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=cp>#[macro_export]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>values_of_type</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$values</span>:<span class=nc>expr</span><span class=p>,</span><span class=w> </span><span class=cp>$variant</span>:<span class=nc>ident</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>result</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=nb>Vec</span>::<span class=n>new</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>for</span><span class=w> </span><span class=n>val</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=cp>$values</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=k>if</span><span class=w> </span><span class=kd>let</span><span class=w> </span><span class=n>Multi</span>::<span class=cp>$variant</span><span class=p>(</span><span class=n>v</span><span class=p>)</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>val</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                    </span><span class=n>result</span><span class=p>.</span><span class=n>push</span><span class=p>(</span><span class=n>v</span><span class=p>.</span><span class=n>clone</span><span class=p>());</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=n>result</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>main</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>values</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=fm>vec!</span><span class=p>[</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>Multi</span>::<span class=n>Byte</span><span class=p>(</span><span class=mi>1</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>Multi</span>::<span class=n>Int</span><span class=p>(</span><span class=mi>1000</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>Multi</span>::<span class=n>Str</span><span class=p>(</span><span class=s>&#34;a string&#34;</span><span class=p>.</span><span class=n>to_string</span><span class=p>()),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>Multi</span>::<span class=n>Byte</span><span class=p>(</span><span class=mi>2</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>];</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>ints</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=fm>values_of_type!</span><span class=p>(</span><span class=o>&amp;</span><span class=n>values</span><span class=p>,</span><span class=w> </span><span class=n>Int</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;Integer values: </span><span class=si>{ints:?}</span><span class=s>&#34;</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>bytes</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=fm>values_of_type!</span><span class=p>(</span><span class=o>&amp;</span><span class=n>values</span><span class=p>,</span><span class=w> </span><span class=n>Byte</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=fm>println!</span><span class=p>(</span><span class=s>&#34;Byte values: </span><span class=si>{bytes:?}</span><span class=s>&#34;</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c1>// Output:
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=c1>//   Integer values: [1000]
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=c1>//   Byte values: [1, 2]
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>另一个宏的使用场景是，规避同一结构体中的数据被分散在代码的不同区域。</p><p>比如，假设一个结构体封装了 HTTP 的状态码。通过宏可以避免实现这些信息时代码的分散：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=c1>// http.rs module
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=cp>#[derive(Debug, PartialEq, Eq, Clone, Copy)]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>pub</span><span class=w> </span><span class=k>enum</span> <span class=nc>Group</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>Informational</span><span class=p>,</span><span class=w> </span><span class=c1>// 1xx
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=n>Successful</span><span class=p>,</span><span class=w>    </span><span class=c1>// 2xx
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=n>Redirection</span><span class=p>,</span><span class=w>   </span><span class=c1>// 3xx
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=n>ClientError</span><span class=p>,</span><span class=w>   </span><span class=c1>// 4xx
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=n>ServerError</span><span class=p>,</span><span class=w>   </span><span class=c1>// 5xx
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=c1>// Information about HTTP response codes.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=fm>http_codes!</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>Continue</span><span class=w>           </span><span class=o>=&gt;</span><span class=w> </span><span class=p>(</span><span class=mi>100</span><span class=p>,</span><span class=w> </span><span class=n>Informational</span><span class=p>,</span><span class=w> </span><span class=s>&#34;Continue&#34;</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>SwitchingProtocols</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>(</span><span class=mi>101</span><span class=p>,</span><span class=w> </span><span class=n>Informational</span><span class=p>,</span><span class=w> </span><span class=s>&#34;Switching Protocols&#34;</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c1>// ...
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=nb>Ok</span><span class=w>                 </span><span class=o>=&gt;</span><span class=w> </span><span class=p>(</span><span class=mi>200</span><span class=p>,</span><span class=w> </span><span class=n>Successful</span><span class=p>,</span><span class=w> </span><span class=s>&#34;Ok&#34;</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>Created</span><span class=w>            </span><span class=o>=&gt;</span><span class=w> </span><span class=p>(</span><span class=mi>201</span><span class=p>,</span><span class=w> </span><span class=n>Successful</span><span class=p>,</span><span class=w> </span><span class=s>&#34;Created&#34;</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c1>// ...
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>通过使用宏，可以将每个 HTTP 状态码的所有相关联的信息 —— 数值、元组以及描述信息 —— 都聚集起来，看起来就像是使用一种领域特定语言（domain-specifix language, DSL）来保存数据一样。</p><p>汇聚之后，宏就可以生成代码。每一行类似<code>$( ... )+</code>中的代码都会被扩展成特定的代码：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>http_codes</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$(</span><span class=w> </span><span class=cp>$name</span>:<span class=nc>ident</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>(</span><span class=cp>$val</span>:<span class=nc>literal</span><span class=p>,</span><span class=w> </span><span class=cp>$group</span>:<span class=nc>ident</span><span class=p>,</span><span class=w> </span><span class=cp>$text</span>:<span class=nc>literal</span><span class=p>),</span><span class=w> </span><span class=p>)</span><span class=o>+</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=cp>#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=cp>#[repr(i32)]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=k>enum</span> <span class=nc>Status</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=cp>$(</span><span class=w> </span><span class=cp>$name</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=cp>$val</span><span class=p>,</span><span class=w> </span><span class=p>)</span><span class=o>+</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=k>impl</span><span class=w> </span><span class=n>Status</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>fn</span> <span class=nf>group</span><span class=p>(</span><span class=o>&amp;</span><span class=bp>self</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>Group</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=k>match</span><span class=w> </span><span class=bp>self</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                    </span><span class=cp>$(</span><span class=w> </span><span class=bp>Self</span>::<span class=cp>$name</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=n>Group</span>::<span class=cp>$group</span><span class=p>,</span><span class=w> </span><span class=p>)</span><span class=o>+</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>fn</span> <span class=nf>text</span><span class=p>(</span><span class=o>&amp;</span><span class=bp>self</span><span class=p>)</span><span class=w> </span>-&gt; <span class=kp>&amp;</span><span class=nb>&#39;static</span> <span class=kt>str</span> <span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=k>match</span><span class=w> </span><span class=bp>self</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                    </span><span class=cp>$(</span><span class=w> </span><span class=bp>Self</span>::<span class=cp>$name</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=cp>$text</span><span class=p>,</span><span class=w> </span><span class=p>)</span><span class=o>+</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=k>impl</span><span class=w> </span><span class=n>core</span>::<span class=n>convert</span>::<span class=n>TryFrom</span><span class=o>&lt;</span><span class=kt>i32</span><span class=o>&gt;</span><span class=w> </span><span class=k>for</span><span class=w> </span><span class=n>Status</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>type</span> <span class=nc>Error</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>fn</span> <span class=nf>try_from</span><span class=p>(</span><span class=n>v</span>: <span class=kt>i32</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nb>Result</span><span class=o>&lt;</span><span class=bp>Self</span><span class=p>,</span><span class=w> </span><span class=bp>Self</span>::<span class=n>Error</span><span class=o>&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=k>match</span><span class=w> </span><span class=n>v</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                    </span><span class=cp>$(</span><span class=w> </span><span class=cp>$val</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=nb>Ok</span><span class=p>(</span><span class=bp>Self</span>::<span class=cp>$name</span><span class=p>),</span><span class=w> </span><span class=p>)</span><span class=o>+</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                    </span><span class=n>_</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=nb>Err</span><span class=p>(())</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>这样处理后，宏就可以依据输入的参数来派生如下的代码：</p><ul><li>一个<code>enum</code>枚举用来保存所有的数值。</li><li>一个<code>group()</code>方法来返回一个 HTTP 状态码的分组归属。</li><li>一个<code>text()</code>方法来将状态码映射到对应的文字描述中。</li><li>一个<code>TryFrom&lt;i32></code>的特征实现来将数值转换成<code>enum</code>中的枚举值。</li></ul><p>如果需要新增一个状态码，只需要添加这样的一行代码：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>ImATeapot</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>(</span><span class=mi>418</span><span class=p>,</span><span class=w> </span><span class=n>ClientError</span><span class=p>,</span><span class=w> </span><span class=s>&#34;I&#39;m a teapot&#34;</span><span class=p>),</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>如果不使用宏的话，就需要对四部分代码分别更新。编译器可能会有一些提示信息（<code>match</code>表达式需要覆盖所有的场景），但是存在一些遗漏 —— <code>TryFrom&lt;i32</code> 就很容易被遗忘。</p><p>由于宏可以在调用的地方对代码进行展开，所有它们也可以用来自动生成一些提示信息 —— 尤其是，在使用了标准库中的<a class=link href=https://doc.rust-lang.org/std/macro.file.html target=_blank rel=noopener>file!()</a>以及<a class=link href=https://doc.rust-lang.org/std/macro.line.html target=_blank rel=noopener>line!()</a>宏了之后，可以生成代码的位置信息：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=n>macro_rules</span><span class=o>!</span><span class=w> </span><span class=n>log_failure</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w> </span><span class=cp>$e</span>:<span class=nc>expr</span><span class=w> </span><span class=p>}</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=kd>let</span><span class=w> </span><span class=n>result</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=cp>$e</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=k>if</span><span class=w> </span><span class=kd>let</span><span class=w> </span><span class=nb>Err</span><span class=p>(</span><span class=n>err</span><span class=p>)</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=o>&amp;</span><span class=n>result</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                </span><span class=fm>eprintln!</span><span class=p>(</span><span class=s>&#34;</span><span class=si>{}</span><span class=s>:</span><span class=si>{}</span><span class=s>: operation &#39;</span><span class=si>{}</span><span class=s>&#39; failed: </span><span class=si>{:?}</span><span class=s>&#34;</span><span class=p>,</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                          </span><span class=fm>file!</span><span class=p>(),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                          </span><span class=fm>line!</span><span class=p>(),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                          </span><span class=fm>stringify!</span><span class=p>(</span><span class=cp>$e</span><span class=p>),</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>                          </span><span class=n>err</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>            </span><span class=n>result</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>当报错出现时，日志文件中就会自动地包含报错内容、位置等细节：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>use</span><span class=w> </span><span class=n>std</span>::<span class=n>convert</span>::<span class=n>TryInto</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=kd>let</span><span class=w> </span><span class=n>x</span>: <span class=nb>Result</span><span class=o>&lt;</span><span class=kt>u8</span><span class=p>,</span><span class=w> </span><span class=n>_</span><span class=o>&gt;</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=fm>log_failure!</span><span class=p>(</span><span class=mf>512.</span><span class=n>try_into</span><span class=p>());</span><span class=w> </span><span class=c1>// too big for `u8`
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=kd>let</span><span class=w> </span><span class=n>y</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=fm>log_failure!</span><span class=p>(</span><span class=n>std</span>::<span class=kt>str</span>::<span class=n>from_utf8</span><span class=p>(</span><span class=sa>b</span><span class=s>&#34;</span><span class=se>\xc3\x28</span><span class=s>&#34;</span><span class=p>));</span><span class=w> </span><span class=c1>// invalid UTF-8
+</span></span></span></code></pre></td></tr></table></div></div><h2 id=宏的缺点><a href=#%e5%ae%8f%e7%9a%84%e7%bc%ba%e7%82%b9>#</a>
+宏的缺点</h2><p>使用宏的最大缺点是引入之后代码的可读性及可维护性。之前在声明宏小结中介绍了宏允许我们创建一个特定的语言来简明地描述代码及数据的关键特性。但是，这也意味着任何阅读这段代码的人将不得不理解这段使用 Rust 实现的特定的语句 —— 而且这还是使用宏来定义的。比如，在<code>http_codes!</code>宏的示例中使用了一个名为<code>Status</code>的 Rust <code>enum</code>，但是在使用的时候并不能察觉到。</p><p>这种使用宏而引入的不可知性远超一般程序员所能带来的影响：很多分析或和 Rust 交互的工具无法理解这样晦涩的代码，因为它不在遵循 Rust 代码交互语法。先前展示的<code>square_once!</code>宏就是一个直观的例子：宏的主体并没有按照<code>rustfmt</code>的规则来格式化：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>x</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=cp>$e</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c1>// The `rustfmt` tool doesn&#39;t really cope with code in
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=c1>// macros, so this has not been reformatted to `x * x`.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=n>x</span><span class=o>*</span><span class=n>x</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>另一个例子是已经提到的<code>http_codes!</code>宏，这里使用了<code>Group</code>枚举了诸如<code>Informational</code>的值，而没有使用<code>Group::</code>前缀或<code>use</code>语句。这一点会让代码的补全工具感到混淆。</p><p>甚至编译器本身也无法提供更多的帮助：编译器提供的报错信息没有完全符合宏的定义及使用。当然，还是有一些工具（参照<a class=link href=https://www.lurklurk.org/effective-rust/use-tools.html target=_blank rel=noopener>第 31 条</a>）可以辅助宏的使用，比如早先使用的 David Tolnay 的 <a class=link href=https://github.com/dtolnay/cargo-expand target=_blank rel=noopener>cargo-expand</a>。</p><p>使用宏也可能会导致代码的膨胀 —— 一个简单的宏调用就可能引入数百行的生成代码，并且在进行代码分析时是无法直观看到的。这在代码第一次编写时可能不会成为问题，因为彼时这些代码是需要的，并且帮助开发者节约了大量的代码编写时间。但是，如果这些代码随后不再需要了，考虑实际生成的数百行代码，仅从数行的宏调用中可能并不能看到将其删除的必要性。</p><h2 id=建议><a href=#%e5%bb%ba%e8%ae%ae>#</a>
+建议</h2><p>尽管上节我们列举了很多宏的缺点，但是当我们需要合并存在一些存在一致性的代码，但是没有其他可用的方式时，使用宏仍然是完成这样工作的正确工具：<em>当宏是确保不同代码保持一致的唯一方式时，使用它！</em></p><p>当我们需要合并一些模版化的代码时，宏也是可以使用的工具：<em>使用宏来处理模版代码</em>，当它们无法合并为一个函数或者一个特性时。</p><p>为了降低宏对可读性的影响，请尽量避免在宏中使用和 Rust 的一般语法规则相冲突的语法。要么让宏在调用时和一般的代码表现的一致；要么让宏在调用时和一般的代码完全不同，这样就没有用户会混淆宏和一般的代码。特别地，可以遵循如下的准则：</p><ul><li><em>尽可能的避免向宏传递参数的引用</em> —— 类似<code>my_macro!(list)</code>的使用就比<code>my_macro!(&amp;list)</code>要好。</li><li><em>尽量避免在宏中引入非局部的控制流</em>，这样所有阅读这段代码的人都可以在不了解宏的细节的情况下，正确理解上下文中的控制流。</li></ul><p>这种倾向于类似 Rust 一般代码的可读性偏好有时会影响声明宏或者过程式宏的选择。如果你需要给一个<code>struct</code>的每一个字段或者<code>enum</code>中的每一个枚举值都生成代码，<em>尽量使用派生宏来处理</em>（暂时忽略在上一节中列举的问题） —— 这样会更加符合语言习惯并且读起来更加简单。</p><p>然而，如果要添加的派生宏并非是项目中所独有的功能，可以检查下外部的库中是否已经提供了所需要的宏（参照<a class=link href=https://www.lurklurk.org/effective-rust/dep-graph.html target=_blank rel=noopener>第 25 条</a>）。比如，类似将数值类型转换为合适的 C 风格的枚举值的需求：在<a class=link href=https://docs.rs/enumn/latest/enumn/derive.N.html target=_blank rel=noopener>enumn::N</a>、[num_enum::TryFromPrimitive]、<a class=link href=https://docs.rs/num-derive/latest/num_derive/derive.FromPrimitive.html target=_blank rel=noopener>num_derive::FromPrimitive</a>以及<a class=link href=https://docs.rs/strum/latest/strum/derive.FromRepr.html target=_blank rel=noopener>strum::FromRepr</a>中都一定程度的实现了这个需求。</p><hr><h3 id=注释><a href=#%e6%b3%a8%e9%87%8a>#</a>
+注释</h3><p>原文<a class=link href=https://www.lurklurk.org/effective-rust/macros.html target=_blank rel=noopener>点这里</a>查看。</p><div class=footnotes role=doc-endnotes><hr><ol><li id=fn:1><p>眼神儿好的读者可能已经注意到了<code>format_arg!</code>仍然像是一个宏的调用，尽管它在<code>println!</code>宏的展开代码里。这是因为它是编译器的内建宏。&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:2><p>在<a class=link href=https://doc.rust-lang.org/std/fmt/index.html target=_blank rel=noopener>std::fmt 模块</a>中也包含了很多其他展示特定格式数据是会使用的特性。比如，当需要一个 x 格式的特殊说明符来输出小写的十六进制输出时，就会使用<a class=link href=https://doc.rust-lang.org/std/fmt/trait.LowerHex.html target=_blank rel=noopener>LowerHex</a>特性。&#160;<a href=#fnref:2 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li></ol></div></section><footer class=article-footer><section class=article-tags><a href=/tags/%E8%AF%91%E6%96%87/>译文</a>
+<a href=/tags/effective-rust/>Effective-Rust</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-30-%E6%9D%A1%E4%B8%8D%E4%BB%85%E4%BB%85%E6%98%AF%E5%8D%95%E6%B5%8B/><div class=article-details><h2 class=article-title>【译文/effective-rust】第 30 条：不仅仅是单测</h2></div></a></article><article><a href=/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-29-%E6%9D%A1%E9%81%B5%E5%BE%AA-clippy-%E7%9A%84%E5%BB%BA%E8%AE%AE/><div class=article-details><h2 class=article-title>【译文/effective-rust】第 29 条：遵循 Clippy 的建议</h2></div></a></article><article><a href=/p/%E8%AF%91%E6%96%87/effective-rust%E7%AC%AC-27-%E6%9D%A1%E4%B8%BA%E5%85%AC%E5%85%B1%E6%8E%A5%E5%8F%A3%E6%92%B0%E5%86%99%E6%96%87%E6%A1%A3/><div class=article-details><h2 class=article-title>【译文/effective-rust】第 27 条：为公共接口撰写文档</h2></div></a></article><article><a href=/p/emacs-%E5%AD%97%E7%AC%A6%E6%93%8D%E4%BD%9C%E5%BF%AB%E6%8D%B7%E9%94%AE/><div class=article-details><h2 class=article-title>Emacs 字符操作快捷键</h2></div></a></article><article><a href=/p/bpftrace-%E9%81%8D%E5%8E%86-golang-%E9%93%BE%E8%A1%A8go17-/><div class=article-details><h2 class=article-title>bpftrace 遍历 golang 链表（go17+）</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

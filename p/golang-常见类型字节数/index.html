@@ -1,0 +1,184 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" ebpf 分析golang程序时，离不开对参数大小的判断。这里列出来一些基本类型的大小，并通过汇编对应验证函数的方式来肯定判断结果。\n# 信息 这里列出基本类型及其作为参数传递时，占用的空间大小如下表。\n类型 长度 说明 指针 8B 64位机为 8Byte, 32位机位4Byte context 16B interface 类型。其中，前8B是类型信息，后8B是对象的指针信息 interface 16B 2 个指针，详见draveness-go-interface，或者 runtime/runtime2.go iface/eface 定义 int64 8B - int 8B 64位机为 8Byte, 32位机位4Byte string 16B 8B 地址 + 8B string长度 slice 24B 8B地址 + 8B slice 成员数量 + 8B slice capability func 8B func 作为函数参数时，传递的是 func 的地址 需要注意的是，作为函数参数传递时，golang会对参数按照 8B 进行对齐。\n"><title>golang 常见类型字节数</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="golang 常见类型字节数"><meta property='og:description' content=" ebpf 分析golang程序时，离不开对参数大小的判断。这里列出来一些基本类型的大小，并通过汇编对应验证函数的方式来肯定判断结果。\n# 信息 这里列出基本类型及其作为参数传递时，占用的空间大小如下表。\n类型 长度 说明 指针 8B 64位机为 8Byte, 32位机位4Byte context 16B interface 类型。其中，前8B是类型信息，后8B是对象的指针信息 interface 16B 2 个指针，详见draveness-go-interface，或者 runtime/runtime2.go iface/eface 定义 int64 8B - int 8B 64位机为 8Byte, 32位机位4Byte string 16B 8B 地址 + 8B string长度 slice 24B 8B地址 + 8B slice 成员数量 + 8B slice capability func 8B func 作为函数参数时，传递的是 func 的地址 需要注意的是，作为函数参数传递时，golang会对参数按照 8B 进行对齐。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='bpf'><meta property='article:tag' content='golang'><meta property='article:published_time' content='2022-06-06T14:36:00+00:00'><meta property='article:modified_time' content='2022-06-06T14:36:00+00:00'><meta name=twitter:title content="golang 常见类型字节数"><meta name=twitter:description content=" ebpf 分析golang程序时，离不开对参数大小的判断。这里列出来一些基本类型的大小，并通过汇编对应验证函数的方式来肯定判断结果。\n# 信息 这里列出基本类型及其作为参数传递时，占用的空间大小如下表。\n类型 长度 说明 指针 8B 64位机为 8Byte, 32位机位4Byte context 16B interface 类型。其中，前8B是类型信息，后8B是对象的指针信息 interface 16B 2 个指针，详见draveness-go-interface，或者 runtime/runtime2.go iface/eface 定义 int64 8B - int 8B 64位机为 8Byte, 32位机位4Byte string 16B 8B 地址 + 8B string长度 slice 24B 8B地址 + 8B slice 成员数量 + 8B slice capability func 8B func 作为函数参数时，传递的是 func 的地址 需要注意的是，作为函数参数传递时，golang会对参数按照 8B 进行对齐。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/>golang 常见类型字节数</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jun 06, 2022</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 4 分钟</time></div></footer></div></header><section class=article-content><blockquote><p><code>ebpf</code> 分析<code>golang</code>程序时，离不开对参数大小的判断。这里列出来一些基本类型的大小，并通过汇编对应验证函数的方式来肯定判断结果。</p></blockquote><h1 id=信息><a href=#%e4%bf%a1%e6%81%af>#</a>
+信息</h1><p>这里列出基本类型及其作为参数传递时，占用的空间大小如下表。</p><div class=table-wrapper><table><thead><tr><th style=text-align:left>类型</th><th style=text-align:left>长度</th><th style=text-align:left>说明</th></tr></thead><tbody><tr><td style=text-align:left>指针</td><td style=text-align:left>8B</td><td style=text-align:left>64位机为 8Byte, 32位机位4Byte</td></tr><tr><td style=text-align:left>context</td><td style=text-align:left>16B</td><td style=text-align:left>interface 类型。其中，前8B是类型信息，后8B是对象的指针信息</td></tr><tr><td style=text-align:left>interface</td><td style=text-align:left>16B</td><td style=text-align:left>2 个指针，详见<a class=link href=https://draveness.me/golang/docs/part2-foundation/ch04-basic/golang-interface/ target=_blank rel=noopener>draveness-go-interface</a>，或者 runtime/runtime2.go iface/eface 定义</td></tr><tr><td style=text-align:left>int64</td><td style=text-align:left>8B</td><td style=text-align:left>-</td></tr><tr><td style=text-align:left>int</td><td style=text-align:left>8B</td><td style=text-align:left>64位机为 8Byte, 32位机位4Byte</td></tr><tr><td style=text-align:left>string</td><td style=text-align:left>16B</td><td style=text-align:left>8B 地址 + 8B string长度</td></tr><tr><td style=text-align:left>slice</td><td style=text-align:left>24B</td><td style=text-align:left>8B地址 + 8B slice 成员数量 + 8B slice capability</td></tr><tr><td style=text-align:left>func</td><td style=text-align:left>8B</td><td style=text-align:left>func 作为函数参数时，传递的是 func 的地址</td></tr></tbody></table></div><p>需要注意的是，作为函数参数传递时，golang会对参数按照 8B 进行对齐。</p><h1 id=验证示例><a href=#%e9%aa%8c%e8%af%81%e7%a4%ba%e4%be%8b>#</a>
+验证示例</h1><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=o>//</span> <span class=n>main</span><span class=o>.</span><span class=n>go</span>
+</span></span><span class=line><span class=cl><span class=n>package</span> <span class=n>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>import</span> <span class=s2>&#34;context&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>A</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>p1</span> <span class=n>int64</span>
+</span></span><span class=line><span class=cl>	<span class=n>a</span>  <span class=n>byte</span>
+</span></span><span class=line><span class=cl>	<span class=n>b</span>  <span class=n>int64</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>FuncPt</span> <span class=k>func</span><span class=p>(</span><span class=n>A</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>InterA</span> <span class=n>interface</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>Echo</span><span class=p>(</span><span class=n>A</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckPointer</span><span class=p>(</span><span class=n>a</span> <span class=o>*</span><span class=n>A</span><span class=p>)</span>            <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckCtx</span><span class=p>(</span><span class=n>ctx</span> <span class=n>context</span><span class=o>.</span><span class=n>Context</span><span class=p>)</span> <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckInterface</span><span class=p>(</span><span class=n>inter</span> <span class=n>InterA</span><span class=p>)</span>  <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckString</span><span class=p>(</span><span class=n>s</span> <span class=n>string</span><span class=p>)</span>         <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckSlice</span><span class=p>(</span><span class=n>arr</span> <span class=p>[]</span><span class=n>string</span><span class=p>)</span>      <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckFunc</span><span class=p>(</span><span class=n>fn</span> <span class=n>FuncPt</span><span class=p>)</span>          <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckAlign</span><span class=p>(</span><span class=n>a</span> <span class=n>byte</span><span class=p>)</span>            <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>CheckStruct</span><span class=p>(</span><span class=n>a</span> <span class=n>A</span><span class=p>)</span>              <span class=p>{}</span>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span>                        <span class=p>{}</span>
+</span></span></code></pre></td></tr></table></div></div><p>对该代码进行汇编:<br><code>go build -gcflags "-S" . > main.s</code>
+可以得到汇编后的结果，并验证上述类型所占大小的描述。这里推荐下曹大的<a class=link href=https://xargin.com/plan9-assembly/ target=_blank rel=noopener>plan9 汇编入门</a>，里面对<code>golang</code>汇编后的<code>plan9</code>进行了介绍。由其介绍可知，汇编后函数签名后的<code>$x-y</code>指代的是该函数的栈空间以及参数大小（入参+返回参数，<code>go-1.17</code>及之后的版本未验证）。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl># command-line-arguments
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckPointer STEXT size=16 args=0x8 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:17)	TEXT	&#34;&#34;.CheckPointer(SB), LEAF|NOFRAME|ABIInternal, $0-8
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:17)	FUNCDATA	ZR, gclocals·2a5305abe05176240e61b8620e19a815(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:17)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:17)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckCtx STEXT size=16 args=0x10 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:18)	TEXT	&#34;&#34;.CheckCtx(SB), LEAF|NOFRAME|ABIInternal, $0-16
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:18)	FUNCDATA	ZR, gclocals·f207267fbf96a0178e8758c6e3e0ce28(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:18)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:18)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckInterface STEXT size=16 args=0x10 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:19)	TEXT	&#34;&#34;.CheckInterface(SB), LEAF|NOFRAME|ABIInternal, $0-16
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:19)	FUNCDATA	ZR, gclocals·f207267fbf96a0178e8758c6e3e0ce28(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:19)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:19)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckString STEXT size=16 args=0x10 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:20)	TEXT	&#34;&#34;.CheckString(SB), LEAF|NOFRAME|ABIInternal, $0-16
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:20)	FUNCDATA	ZR, gclocals·2a5305abe05176240e61b8620e19a815(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:20)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:20)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckSlice STEXT size=16 args=0x18 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:21)	TEXT	&#34;&#34;.CheckSlice(SB), LEAF|NOFRAME|ABIInternal, $0-24
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:21)	FUNCDATA	ZR, gclocals·2a5305abe05176240e61b8620e19a815(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:21)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:21)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckFunc STEXT size=16 args=0x8 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:22)	TEXT	&#34;&#34;.CheckFunc(SB), LEAF|NOFRAME|ABIInternal, $0-8
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:22)	FUNCDATA	ZR, gclocals·2a5305abe05176240e61b8620e19a815(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:22)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:22)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckAlign STEXT size=16 args=0x8 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:23)	TEXT	&#34;&#34;.CheckAlign(SB), LEAF|NOFRAME|ABIInternal, $0-8
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:23)	FUNCDATA	ZR, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:23)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:23)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.CheckStruct STEXT size=16 args=0x18 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:24)	TEXT	&#34;&#34;.CheckStruct(SB), LEAF|NOFRAME|ABIInternal, $0-24
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:24)	FUNCDATA	ZR, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:24)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:24)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span><span class=line><span class=cl>&#34;&#34;.main STEXT size=16 args=0x0 locals=0x0 funcid=0x0 leaf
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:26)	TEXT	&#34;&#34;.main(SB), LEAF|NOFRAME|ABIInternal, $0-0
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:26)	FUNCDATA	ZR, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:26)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+</span></span><span class=line><span class=cl>	0x0000 00000 (/Users/liyan/zone/go_learn/param/main.go:28)	RET	(R30)
+</span></span><span class=line><span class=cl>	0x0000 c0 03 5f d6 00 00 00 00 00 00 00 00 00 00 00 00  .._.............
+</span></span></code></pre></td></tr></table></div></div></section><footer class=article-footer><section class=article-tags><a href=/tags/bpf/>Bpf</a>
+<a href=/tags/golang/>Golang</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/ebpf-tail-calls%E7%A4%BA%E4%BE%8B/><div class=article-details><h2 class=article-title>eBPF tail-calls示例</h2></div></a></article><article><a href=/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/><div class=article-details><h2 class=article-title>bpftrace 无侵入遍历golang链表</h2></div></a></article><article><a href=/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/><div class=article-details><h2 class=article-title>BPF 获取 LVS FullNat 模式下的 Client IP</h2></div></a></article><article><a href=/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/><div class=article-details><h2 class=article-title>ebpf 采集ebpf 采集tag+tcp五元组</h2></div></a></article><article><a href=/p/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/><div class=article-details><h2 class=article-title>ebpf采集mysql请求信息及ebpf对应用安全的思考</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

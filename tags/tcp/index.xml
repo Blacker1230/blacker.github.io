@@ -1,0 +1,1325 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Tcp on 李岩</title><link>https://liyan-ah.github.io/tags/tcp/</link><description>Recent content in Tcp on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Sat, 24 Feb 2024 15:55:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/tcp/index.xml" rel="self" type="application/rss+xml"/><item><title>TCP close 过程分析</title><link>https://liyan-ah.github.io/p/tcp-close-%E8%BF%87%E7%A8%8B%E5%88%86%E6%9E%90/</link><pubDate>Sat, 24 Feb 2024 15:55:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/tcp-close-%E8%BF%87%E7%A8%8B%E5%88%86%E6%9E%90/</guid><description>&lt;blockquote>
+&lt;p>最近做了一些 TCP 连接观测相关的项目，又到了一个节奏点上了。这里趁着这个机会，做一些总结，同时描述一下 tcp close 过程中的一些疑惑。&lt;/p>
+&lt;/blockquote>
+&lt;p>在一些场景下，对服务的调用观测是很有价值的。笔者最近实践了使用&lt;code>tcp_close&lt;/code>对服务主被调信息的观测，在这里作一下记录。&lt;/p>
+&lt;h1 id="一tcp-close-的一般过程">
+&lt;a href="#%e4%b8%80tcp-close-%e7%9a%84%e4%b8%80%e8%88%ac%e8%bf%87%e7%a8%8b">#&lt;/a>
+一、tcp close 的一般过程
+&lt;/h1>&lt;p>首先来看一下&lt;code>tcp close&lt;/code>的过程。&lt;br>
+对&lt;code>tcp&lt;/code>涉及操作的分析最权威的自然是RFC文档。依据&lt;a class="link" href="https://www.rfc-editor.org/rfc/pdfrfc/rfc793.txt.pdf" target="_blank" rel="noopener"
+>RFC-793&lt;/a>文档中的描述，&lt;code>tcp close&lt;/code>时的状态转移信息为如下：&lt;/p>
+&lt;p>&lt;img src="https://liyan-ah.github.io/tcp-state.png"
+loading="lazy"
+alt="tcp state"
+>&lt;/p>
+&lt;p>但是涉及到具体的&lt;code>Linux&lt;/code>下的&lt;code>tcp close&lt;/code>的过程分析，文档就比较少了。笔者找到了一篇介绍&lt;code>Linux&lt;/code>下&lt;code>tcp&lt;/code>操作相关的介绍文档。&lt;a class="link" href="https://github.com/fzyz999/Analysis_TCP_in_Linux/blob/master/tcp.pdf" target="_blank" rel="noopener"
+>Analysis_TCP_in_Linux&lt;/a>中描述了主动触发&lt;code>close&lt;/code>及被动触发&lt;code>close&lt;/code>的&lt;code>socket&lt;/code>双方涉及的函数调用，这为后面的验证提供了思路。&lt;/p>
+&lt;h1 id="二bpf-来观测-tcp-close-过程">
+&lt;a href="#%e4%ba%8cbpf-%e6%9d%a5%e8%a7%82%e6%b5%8b-tcp-close-%e8%bf%87%e7%a8%8b">#&lt;/a>
+二、BPF 来观测 tcp close 过程
+&lt;/h1>&lt;p>依据&lt;a class="link" href="https://github.com/fzyz999/Analysis_TCP_in_Linux/blob/master/tcp.pdf" target="_blank" rel="noopener"
+>Analysis_TCP_in_Linux&lt;/a>中的描述，笔者使用&lt;code>python&lt;/code>构建了如下的验证&lt;code>demo&lt;/code>。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;span class="lnt">75
+&lt;/span>&lt;span class="lnt">76
+&lt;/span>&lt;span class="lnt">77
+&lt;/span>&lt;span class="lnt">78
+&lt;/span>&lt;span class="lnt">79
+&lt;/span>&lt;span class="lnt">80
+&lt;/span>&lt;span class="lnt">81
+&lt;/span>&lt;span class="lnt">82
+&lt;/span>&lt;span class="lnt">83
+&lt;/span>&lt;span class="lnt">84
+&lt;/span>&lt;span class="lnt">85
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># coding=UTF-8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">import socket
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">import time
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">import getopt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">import sys
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">srv_ip = &amp;#34;&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">srv_port = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">def server(srv_ip, srv_port):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.bind((srv_ip, srv_port))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.listen(1024)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.setblocking(1)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> index = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> while True:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> connection, address = conn.accept()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> try:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> dst = connection.getpeername()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> while True:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> request = connection.recv(1024)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> req_str = str(request.decode())
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if req_str == &amp;#39;end&amp;#39;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # 这里以客户端传输一个特殊信息作为结束信息
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # tcp server 和 client 之间的 close 是没有必然联系的
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # 只能约定一个关闭条件。此时，无法确定客户端是否发起了断联
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;rcv end, close...&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> connection.close()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> time.sleep(2)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> break
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # pass
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;conn: %s:%d received: %s&amp;#34; % (dst[0], dst[1], req_str))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> response = (&amp;#34;client, msg index: %d&amp;#34; % index).encode()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> connection.send(response)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> index += 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;conn: %s:%d closed&amp;#34; % (dst[0], dst[1]))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> except Exception as e:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;handle exception during dst. %s ...&amp;#34; % e)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # pass
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # pass
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">def client(srv_ip, srv_port):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> try:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> server_addr = (srv_ip, srv_port)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.connect(server_addr)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> msg = (&amp;#34;server, msg index: 0&amp;#34;).encode()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.send(msg)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> data = conn.recv(1024)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;rcv from server: %s&amp;#34; % str(data.decode()))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.send(&amp;#34;end&amp;#34;.encode())
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;end. close ...&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> time.sleep(2)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> conn.close()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> time.sleep(2)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> except Exception as e:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;connection with server with error, %s&amp;#34; % e)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">if __name__ == &amp;#34;__main__&amp;#34;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> work_mode = &amp;#34;s&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> try:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> opts, args = getopt.getopt(sys.argv[1:], &amp;#34;i:p:s:c&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> [&amp;#34;srv_ip=&amp;#34;, &amp;#34;port=&amp;#34;, &amp;#34;server&amp;#34;, &amp;#34;client&amp;#34;])
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if len(opts) == 0:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;unknown opts&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> sys.exit(0)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> for opt, arg in opts:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if opt in (&amp;#34;-i&amp;#34;, &amp;#34;--srv_ip&amp;#34;):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> srv_ip = arg
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if opt in (&amp;#34;-p&amp;#34;, &amp;#34;--port&amp;#34;):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> srv_port = int(arg)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if opt in (&amp;#34;--server&amp;#34;):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> work_mode = &amp;#34;s&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if opt in (&amp;#34;--client&amp;#34;):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> work_mode = &amp;#34;c&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> except Exception as e:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;unknown args&amp;#34;)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> sys.exit(0)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if work_mode == &amp;#34;s&amp;#34;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> server(srv_ip, srv_port)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> else:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> client(srv_ip, srv_port)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>从&lt;code>demo&lt;/code>中可以看到，笔者构建的测试代码中，是&lt;code>server&lt;/code>端发起的&lt;code>close&lt;/code>，而后&lt;code>client&lt;/code>端发起&lt;code>close&lt;/code>。&lt;br>
+同时，笔者使用&lt;code>bpftrace&lt;/code>构造了如下的观测代码：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt"> 10
+&lt;/span>&lt;span class="lnt"> 11
+&lt;/span>&lt;span class="lnt"> 12
+&lt;/span>&lt;span class="lnt"> 13
+&lt;/span>&lt;span class="lnt"> 14
+&lt;/span>&lt;span class="lnt"> 15
+&lt;/span>&lt;span class="lnt"> 16
+&lt;/span>&lt;span class="lnt"> 17
+&lt;/span>&lt;span class="lnt"> 18
+&lt;/span>&lt;span class="lnt"> 19
+&lt;/span>&lt;span class="lnt"> 20
+&lt;/span>&lt;span class="lnt"> 21
+&lt;/span>&lt;span class="lnt"> 22
+&lt;/span>&lt;span class="lnt"> 23
+&lt;/span>&lt;span class="lnt"> 24
+&lt;/span>&lt;span class="lnt"> 25
+&lt;/span>&lt;span class="lnt"> 26
+&lt;/span>&lt;span class="lnt"> 27
+&lt;/span>&lt;span class="lnt"> 28
+&lt;/span>&lt;span class="lnt"> 29
+&lt;/span>&lt;span class="lnt"> 30
+&lt;/span>&lt;span class="lnt"> 31
+&lt;/span>&lt;span class="lnt"> 32
+&lt;/span>&lt;span class="lnt"> 33
+&lt;/span>&lt;span class="lnt"> 34
+&lt;/span>&lt;span class="lnt"> 35
+&lt;/span>&lt;span class="lnt"> 36
+&lt;/span>&lt;span class="lnt"> 37
+&lt;/span>&lt;span class="lnt"> 38
+&lt;/span>&lt;span class="lnt"> 39
+&lt;/span>&lt;span class="lnt"> 40
+&lt;/span>&lt;span class="lnt"> 41
+&lt;/span>&lt;span class="lnt"> 42
+&lt;/span>&lt;span class="lnt"> 43
+&lt;/span>&lt;span class="lnt"> 44
+&lt;/span>&lt;span class="lnt"> 45
+&lt;/span>&lt;span class="lnt"> 46
+&lt;/span>&lt;span class="lnt"> 47
+&lt;/span>&lt;span class="lnt"> 48
+&lt;/span>&lt;span class="lnt"> 49
+&lt;/span>&lt;span class="lnt"> 50
+&lt;/span>&lt;span class="lnt"> 51
+&lt;/span>&lt;span class="lnt"> 52
+&lt;/span>&lt;span class="lnt"> 53
+&lt;/span>&lt;span class="lnt"> 54
+&lt;/span>&lt;span class="lnt"> 55
+&lt;/span>&lt;span class="lnt"> 56
+&lt;/span>&lt;span class="lnt"> 57
+&lt;/span>&lt;span class="lnt"> 58
+&lt;/span>&lt;span class="lnt"> 59
+&lt;/span>&lt;span class="lnt"> 60
+&lt;/span>&lt;span class="lnt"> 61
+&lt;/span>&lt;span class="lnt"> 62
+&lt;/span>&lt;span class="lnt"> 63
+&lt;/span>&lt;span class="lnt"> 64
+&lt;/span>&lt;span class="lnt"> 65
+&lt;/span>&lt;span class="lnt"> 66
+&lt;/span>&lt;span class="lnt"> 67
+&lt;/span>&lt;span class="lnt"> 68
+&lt;/span>&lt;span class="lnt"> 69
+&lt;/span>&lt;span class="lnt"> 70
+&lt;/span>&lt;span class="lnt"> 71
+&lt;/span>&lt;span class="lnt"> 72
+&lt;/span>&lt;span class="lnt"> 73
+&lt;/span>&lt;span class="lnt"> 74
+&lt;/span>&lt;span class="lnt"> 75
+&lt;/span>&lt;span class="lnt"> 76
+&lt;/span>&lt;span class="lnt"> 77
+&lt;/span>&lt;span class="lnt"> 78
+&lt;/span>&lt;span class="lnt"> 79
+&lt;/span>&lt;span class="lnt"> 80
+&lt;/span>&lt;span class="lnt"> 81
+&lt;/span>&lt;span class="lnt"> 82
+&lt;/span>&lt;span class="lnt"> 83
+&lt;/span>&lt;span class="lnt"> 84
+&lt;/span>&lt;span class="lnt"> 85
+&lt;/span>&lt;span class="lnt"> 86
+&lt;/span>&lt;span class="lnt"> 87
+&lt;/span>&lt;span class="lnt"> 88
+&lt;/span>&lt;span class="lnt"> 89
+&lt;/span>&lt;span class="lnt"> 90
+&lt;/span>&lt;span class="lnt"> 91
+&lt;/span>&lt;span class="lnt"> 92
+&lt;/span>&lt;span class="lnt"> 93
+&lt;/span>&lt;span class="lnt"> 94
+&lt;/span>&lt;span class="lnt"> 95
+&lt;/span>&lt;span class="lnt"> 96
+&lt;/span>&lt;span class="lnt"> 97
+&lt;/span>&lt;span class="lnt"> 98
+&lt;/span>&lt;span class="lnt"> 99
+&lt;/span>&lt;span class="lnt">100
+&lt;/span>&lt;span class="lnt">101
+&lt;/span>&lt;span class="lnt">102
+&lt;/span>&lt;span class="lnt">103
+&lt;/span>&lt;span class="lnt">104
+&lt;/span>&lt;span class="lnt">105
+&lt;/span>&lt;span class="lnt">106
+&lt;/span>&lt;span class="lnt">107
+&lt;/span>&lt;span class="lnt">108
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;net/sock.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">/*
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_ESTABLISHED = 1,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_SYN_SENT = 2,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_SYN_RECV = 3,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_FIN_WAIT1 = 4,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_FIN_WAIT2 = 5,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_TIME_WAIT = 6,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_CLOSE = 7,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_CLOSE_WAIT = 8,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_LAST_ACK = 9,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_LISTEN = 10,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_CLOSING = 11,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_NEW_SYN_RECV = 12,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">TCP_MAX_STATES = 13
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">每个 hook 点关注 进程的 pid, sk_state
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cm">*/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_close&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_close] pid: %d, state: %d, sock: %d, sk_max_ack_backlog: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">sk_max_ack_backlog&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_set_state&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">ns&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">arg1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_set_state] pid: %d, state: %d, ns: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">ns&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_rcv_established&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_rcv_established] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_fin&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_fin] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_send_fin&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_send_fin] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_timewait_state_process&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_timewait_state_process] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_rcv_state_process&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_rcv_state_process] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_v4_do_rcv&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_v4_do_rcv] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nl">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_timewait_state_process&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">/&lt;/span> &lt;span class="n">comm&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;python&amp;#34;&lt;/span> &lt;span class="o">/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">arg0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;[tcp_stream_wait_close] pid: %d, state: %d, sk: %d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">skc_state&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>首先启动&lt;code>bpftrace&lt;/code>，然后启动&lt;code>server&lt;/code>，使用&lt;code>client&lt;/code>进行通信。此时&lt;code>bpftrace&lt;/code>端的输出为：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">[tcp_close] pid: 2828708, state: 1, sock: -1907214080, sk_max_ack_backlog: 1024
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_set_state] pid: 2828708, state: 1, ns: 4, sk: -1907214080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_send_fin] pid: 2828708, state: 4, sk: -1907214080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_v4_do_rcv] pid: 2828708, state: 1, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_rcv_established] pid: 2828708, state: 1, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_fin] pid: 2828708, state: 1, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_set_state] pid: 2828708, state: 1, ns: 8, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_v4_do_rcv] pid: 2855763, state: 1, sk: -1907214080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_rcv_established] pid: 2855763, state: 1, sk: -1907214080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_close] pid: 2855763, state: 8, sock: -1907216512, sk_max_ack_backlog: 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_set_state] pid: 2855763, state: 8, ns: 9, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_send_fin] pid: 2855763, state: 9, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_timewait_state_process] pid: 2855763, state: 6, sk: -2077492080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_stream_wait_close] pid: 2855763, state: 6, sk: -2077492080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_v4_do_rcv] pid: 2855763, state: 9, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_rcv_state_process] pid: 2855763, state: 9, sk: -1907216512
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[tcp_set_state] pid: 2855763, state: 9, ns: 7, sk: -1907216512
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="三笔者的困惑">
+&lt;a href="#%e4%b8%89%e7%ac%94%e8%80%85%e7%9a%84%e5%9b%b0%e6%83%91">#&lt;/a>
+三、笔者的困惑
+&lt;/h1>&lt;p>这里，笔者观测到的结果和&lt;a class="link" href="https://github.com/fzyz999/Analysis_TCP_in_Linux/blob/master/tcp.pdf" target="_blank" rel="noopener"
+>Analysis_TCP_in_Linux&lt;/a>存在出入，主动发起&lt;code>close&lt;/code>的一方，在第三次挥手时，响应的并不是&lt;code>tcp_rcv_state_process&lt;/code>。相反的，被动&lt;code>close&lt;/code>的&lt;code>socket&lt;/code>在第四次挥手时触发了这个函数。而且，主动&lt;code>close&lt;/code>的&lt;code>socket&lt;/code>，第二次挥手时，响应的&lt;code>socket&lt;/code>看起来发生了变更，而且其状态是&lt;code>TCP_ESTABLISHED&lt;/code>。这其中需要继续探索。&lt;/p>
+&lt;p>以上，作为记录了部分总结。&lt;/p></description></item><item><title>BPF 获取 LVS FullNat 模式下的 Client IP</title><link>https://liyan-ah.github.io/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/</link><pubDate>Wed, 03 Jan 2024 16:15:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/</guid><description>&lt;blockquote>
+&lt;p>搞项目。&lt;/p>
+&lt;/blockquote>
+&lt;p>观测服务的请求调用需求是客观存在的。一般是需要观测服务的主动发起的调用信息，但是偶尔也会遇到需要观测服务被调用信息的需求。但是一般待采集的服务都是挂载在&lt;code>LVS&lt;/code>下面的。这就势必涉及到&lt;code>LVS&lt;/code>预设的工作模式下，一般都是&lt;code>FULLNET&lt;/code>，需要的&lt;code>real client ip&lt;/code>的信息获取方式。&lt;br>
+笔者通过调研，实现了一种通过&lt;code>BPF&lt;/code>来观测挂载在&lt;code>LVS&lt;/code>下的&lt;code>RS&lt;/code>被调用&lt;code>TCP&lt;/code>连接信息的方式。本文中关于&lt;code>toa&lt;/code>的操作及代码定义均引用自&lt;a class="link" href="https://github.com/Huawei/TCP_option_address/tree/master" target="_blank" rel="noopener"
+>Huawei/TCP_option_address&lt;/a>。&lt;/p>
+&lt;h1 id="一效果">
+&lt;a href="#%e4%b8%80%e6%95%88%e6%9e%9c">#&lt;/a>
+一、效果
+&lt;/h1>&lt;p>先看下采集效果：&lt;/p>
+&lt;p>&lt;img src="https://liyan-ah.github.io/tcp-accept.png"
+loading="lazy"
+alt="upload successful"
+>&lt;/p>
+&lt;h1 id="二lvs-fullnat">
+&lt;a href="#%e4%ba%8clvs-fullnat">#&lt;/a>
+二、LVS FullNat
+&lt;/h1>&lt;p>关于&lt;code>LVS&lt;/code>的&lt;code>Nat&lt;/code>,&lt;code>DR&lt;/code>,&lt;code>Tun&lt;/code>以及&lt;code>FullNat&lt;/code>模式的介绍已经有了很多的资料，比如&lt;a class="link" href="https://fafucoder.github.io/2021/12/19/linux-lvs/" target="_blank" rel="noopener"
+>这篇文章&lt;/a>就介绍的很详细。这里笔者附上&lt;code>FullNat&lt;/code>模式下的示意图：&lt;/p>
+&lt;p>&lt;img src="https://liyan-ah.github.io/full-nat.png"
+loading="lazy"
+alt="upload successful"
+>&lt;/p>
+&lt;p>如图所示，如果需要在&lt;code>RS&lt;/code>上获取&lt;code>CIP&lt;/code>，就涉及到&lt;code>TOA&lt;/code>信息的解析。&lt;code>TOA (tcp optional address)&lt;/code>是利用&lt;code>tcp&lt;/code>协议&lt;code>option&lt;/code>字段来传递信息的一种工作方式。关于&lt;code>TOA&lt;/code>的约定笔者并没有找到官方的&lt;code>RFC&lt;/code>文档。只有一些结构的定义。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">/* MUST be 4 bytes alignment */
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">struct toa_data {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> __u8 opcode;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> __u8 opsize;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> __u16 port;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> __u32 ip;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">};
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>同时，&lt;a class="link" href="https://www.rfc-editor.org/rfc/rfc793.txt" target="_blank" rel="noopener"
+>rfc793&lt;/a>里对&lt;code>TCP header&lt;/code>的约定如下，理论上&lt;code>toa_data&lt;/code>应该写在&lt;code>Options&lt;/code>字段中。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"> 0 1 2 3
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Source Port | Destination Port |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Sequence Number |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Acknowledgment Number |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Data | |U|A|P|R|S|F| |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Offset| Reserved |R|C|S|S|Y|I| Window |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | | |G|K|H|T|N|N| |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Checksum | Urgent Pointer |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | Options | Padding |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | data |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TCP Header Format
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>一般来说，将&lt;code>real-client ip&lt;/code>写入&lt;code>tcp option&lt;/code>字段的操作是在&lt;code>LVS&lt;/code>上进行的。而解析并且方便&lt;code>RS&lt;/code>操作，主要是需要在&lt;code>getname&lt;/code>的时候需要返回&lt;code>real-client ip&lt;/code>以便于做进一步的业务逻辑，比如按照&lt;code>IP&lt;/code>限流等，是&lt;code>RS&lt;/code>的&lt;code>toa&lt;/code>模块在操作的。一般是在&lt;code>tcp&lt;/code>握手的第三个&lt;code>SYN&lt;/code>报文处理时，&lt;code>toa.ko&lt;/code>通过&lt;code>tcp_v4_syn_recv_sock&lt;/code>处理的&lt;code>hook&lt;/code>函数方式来触发&lt;code>toa&lt;/code>数据的处理。&lt;br>
+这里附一段这里的逻辑：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;span class="lnt">75
+&lt;/span>&lt;span class="lnt">76
+&lt;/span>&lt;span class="lnt">77
+&lt;/span>&lt;span class="lnt">78
+&lt;/span>&lt;span class="lnt">79
+&lt;/span>&lt;span class="lnt">80
+&lt;/span>&lt;span class="lnt">81
+&lt;/span>&lt;span class="lnt">82
+&lt;/span>&lt;span class="lnt">83
+&lt;/span>&lt;span class="lnt">84
+&lt;/span>&lt;span class="lnt">85
+&lt;/span>&lt;span class="lnt">86
+&lt;/span>&lt;span class="lnt">87
+&lt;/span>&lt;span class="lnt">88
+&lt;/span>&lt;span class="lnt">89
+&lt;/span>&lt;span class="lnt">90
+&lt;/span>&lt;span class="lnt">91
+&lt;/span>&lt;span class="lnt">92
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">static struct sock *
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tcp_v4_syn_recv_sock_toa(struct sock *sk, struct sk_buff *skb,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct request_sock *req, struct dst_entry *dst)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#endif
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct sock *newsock = NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_DBG(&amp;#34;tcp_v4_syn_recv_sock_toa called
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /* call orginal one */
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#if LINUX_VERSION_CODE &amp;gt;= KERNEL_VERSION(4,4,0)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> newsock = tcp_v4_syn_recv_sock(sk, skb, req, dst, req_unhash, own_req);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#else
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> newsock = tcp_v4_syn_recv_sock(sk, skb, req, dst);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#endif
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /* set our value if need */
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (NULL != newsock &amp;amp;&amp;amp; NULL == newsock-&amp;gt;sk_user_data) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> newsock-&amp;gt;sk_user_data = get_toa_data(skb);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (NULL != newsock-&amp;gt;sk_user_data)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_TOA_CNT);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> else
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_NO_TOA_CNT);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_DBG(&amp;#34;tcp_v4_syn_recv_sock_toa: set &amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;sk-&amp;gt;sk_user_data to %p
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> newsock-&amp;gt;sk_user_data);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return newsock;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">static void *get_toa_data(struct sk_buff *skb)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct tcphdr *th;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> int length;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> unsigned char *ptr;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct toa_data tdata;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> void *ret_ptr = NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> unsigned char buff[(15 * 4) - sizeof(struct tcphdr)];
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_DBG(&amp;#34;get_toa_data called
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (NULL != skb) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> th = tcp_hdr(skb);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> length = (th-&amp;gt;doff * 4) - sizeof(struct tcphdr);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ptr = skb_header_pointer(skb, sizeof(struct tcphdr),
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> length, buff);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (!ptr)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> while (length &amp;gt; 0) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> int opcode = *ptr++;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> int opsize;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> switch (opcode) {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> case TCPOPT_EOL:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> case TCPOPT_NOP: /* Ref: RFC 793 section 3.1 */
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> length--;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> continue;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> default:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> opsize = *ptr++;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (opsize &amp;lt; 2) /* &amp;#34;silly options&amp;#34; */
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (opsize &amp;gt; length)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /* don&amp;#39;t parse partial options */
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (TCPOPT_TOA == opcode &amp;amp;&amp;amp; // 254
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TCPOLEN_TOA == opsize) { // 8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> memcpy(&amp;amp;tdata, ptr - 2, sizeof(tdata));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_DBG(&amp;#34;find toa data: ip = &amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;%u.%u.%u.%u, port = %u
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> NIPQUAD(tdata.ip),
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ntohs(tdata.port));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> memcpy(&amp;amp;ret_ptr, &amp;amp;tdata,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> sizeof(ret_ptr));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> TOA_DBG(&amp;#34;coded toa data: %p
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ret_ptr);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return ret_ptr;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ptr += opsize - 2;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> length -= opsize;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return NULL;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>可以看到，这里首先调用了原有的&lt;code>tcp_v4_syn_recv_sock&lt;/code>函数，并且在&lt;code>sk_user_data&lt;/code>未被占用的情况下，通过&lt;code>get_toa_data&lt;/code>的方式，从原始的&lt;code>skb&lt;/code>中将&lt;code>toa&lt;/code>信息解析出来，并将数据赋值给&lt;code>sk-&amp;gt;sk_user_data&lt;/code>。&lt;br>
+虽然这部分逻辑并不完全理解，但是从逻辑来看，只要读取&lt;code>sk_user_data&lt;/code>并且判断其中是否有符合条件的值，即可获取&lt;code>real-client ip&lt;/code>。&lt;br>
+至此，基本的逻辑就梳理出来了。对应的&lt;code>BPF&lt;/code>处理逻辑也就很清晰了。&lt;/p>
+&lt;h1 id="三bpf-逻辑">
+&lt;a href="#%e4%b8%89bpf-%e9%80%bb%e8%be%91">#&lt;/a>
+三、BPF 逻辑
+&lt;/h1>&lt;p>直接上代码：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt"> 10
+&lt;/span>&lt;span class="lnt"> 11
+&lt;/span>&lt;span class="lnt"> 12
+&lt;/span>&lt;span class="lnt"> 13
+&lt;/span>&lt;span class="lnt"> 14
+&lt;/span>&lt;span class="lnt"> 15
+&lt;/span>&lt;span class="lnt"> 16
+&lt;/span>&lt;span class="lnt"> 17
+&lt;/span>&lt;span class="lnt"> 18
+&lt;/span>&lt;span class="lnt"> 19
+&lt;/span>&lt;span class="lnt"> 20
+&lt;/span>&lt;span class="lnt"> 21
+&lt;/span>&lt;span class="lnt"> 22
+&lt;/span>&lt;span class="lnt"> 23
+&lt;/span>&lt;span class="lnt"> 24
+&lt;/span>&lt;span class="lnt"> 25
+&lt;/span>&lt;span class="lnt"> 26
+&lt;/span>&lt;span class="lnt"> 27
+&lt;/span>&lt;span class="lnt"> 28
+&lt;/span>&lt;span class="lnt"> 29
+&lt;/span>&lt;span class="lnt"> 30
+&lt;/span>&lt;span class="lnt"> 31
+&lt;/span>&lt;span class="lnt"> 32
+&lt;/span>&lt;span class="lnt"> 33
+&lt;/span>&lt;span class="lnt"> 34
+&lt;/span>&lt;span class="lnt"> 35
+&lt;/span>&lt;span class="lnt"> 36
+&lt;/span>&lt;span class="lnt"> 37
+&lt;/span>&lt;span class="lnt"> 38
+&lt;/span>&lt;span class="lnt"> 39
+&lt;/span>&lt;span class="lnt"> 40
+&lt;/span>&lt;span class="lnt"> 41
+&lt;/span>&lt;span class="lnt"> 42
+&lt;/span>&lt;span class="lnt"> 43
+&lt;/span>&lt;span class="lnt"> 44
+&lt;/span>&lt;span class="lnt"> 45
+&lt;/span>&lt;span class="lnt"> 46
+&lt;/span>&lt;span class="lnt"> 47
+&lt;/span>&lt;span class="lnt"> 48
+&lt;/span>&lt;span class="lnt"> 49
+&lt;/span>&lt;span class="lnt"> 50
+&lt;/span>&lt;span class="lnt"> 51
+&lt;/span>&lt;span class="lnt"> 52
+&lt;/span>&lt;span class="lnt"> 53
+&lt;/span>&lt;span class="lnt"> 54
+&lt;/span>&lt;span class="lnt"> 55
+&lt;/span>&lt;span class="lnt"> 56
+&lt;/span>&lt;span class="lnt"> 57
+&lt;/span>&lt;span class="lnt"> 58
+&lt;/span>&lt;span class="lnt"> 59
+&lt;/span>&lt;span class="lnt"> 60
+&lt;/span>&lt;span class="lnt"> 61
+&lt;/span>&lt;span class="lnt"> 62
+&lt;/span>&lt;span class="lnt"> 63
+&lt;/span>&lt;span class="lnt"> 64
+&lt;/span>&lt;span class="lnt"> 65
+&lt;/span>&lt;span class="lnt"> 66
+&lt;/span>&lt;span class="lnt"> 67
+&lt;/span>&lt;span class="lnt"> 68
+&lt;/span>&lt;span class="lnt"> 69
+&lt;/span>&lt;span class="lnt"> 70
+&lt;/span>&lt;span class="lnt"> 71
+&lt;/span>&lt;span class="lnt"> 72
+&lt;/span>&lt;span class="lnt"> 73
+&lt;/span>&lt;span class="lnt"> 74
+&lt;/span>&lt;span class="lnt"> 75
+&lt;/span>&lt;span class="lnt"> 76
+&lt;/span>&lt;span class="lnt"> 77
+&lt;/span>&lt;span class="lnt"> 78
+&lt;/span>&lt;span class="lnt"> 79
+&lt;/span>&lt;span class="lnt"> 80
+&lt;/span>&lt;span class="lnt"> 81
+&lt;/span>&lt;span class="lnt"> 82
+&lt;/span>&lt;span class="lnt"> 83
+&lt;/span>&lt;span class="lnt"> 84
+&lt;/span>&lt;span class="lnt"> 85
+&lt;/span>&lt;span class="lnt"> 86
+&lt;/span>&lt;span class="lnt"> 87
+&lt;/span>&lt;span class="lnt"> 88
+&lt;/span>&lt;span class="lnt"> 89
+&lt;/span>&lt;span class="lnt"> 90
+&lt;/span>&lt;span class="lnt"> 91
+&lt;/span>&lt;span class="lnt"> 92
+&lt;/span>&lt;span class="lnt"> 93
+&lt;/span>&lt;span class="lnt"> 94
+&lt;/span>&lt;span class="lnt"> 95
+&lt;/span>&lt;span class="lnt"> 96
+&lt;/span>&lt;span class="lnt"> 97
+&lt;/span>&lt;span class="lnt"> 98
+&lt;/span>&lt;span class="lnt"> 99
+&lt;/span>&lt;span class="lnt">100
+&lt;/span>&lt;span class="lnt">101
+&lt;/span>&lt;span class="lnt">102
+&lt;/span>&lt;span class="lnt">103
+&lt;/span>&lt;span class="lnt">104
+&lt;/span>&lt;span class="lnt">105
+&lt;/span>&lt;span class="lnt">106
+&lt;/span>&lt;span class="lnt">107
+&lt;/span>&lt;span class="lnt">108
+&lt;/span>&lt;span class="lnt">109
+&lt;/span>&lt;span class="lnt">110
+&lt;/span>&lt;span class="lnt">111
+&lt;/span>&lt;span class="lnt">112
+&lt;/span>&lt;span class="lnt">113
+&lt;/span>&lt;span class="lnt">114
+&lt;/span>&lt;span class="lnt">115
+&lt;/span>&lt;span class="lnt">116
+&lt;/span>&lt;span class="lnt">117
+&lt;/span>&lt;span class="lnt">118
+&lt;/span>&lt;span class="lnt">119
+&lt;/span>&lt;span class="lnt">120
+&lt;/span>&lt;span class="lnt">121
+&lt;/span>&lt;span class="lnt">122
+&lt;/span>&lt;span class="lnt">123
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define INADDR_LOOPBACK 0x7f000001 /* 127.0.0.1 */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define INADDR_LOOPBACK_HOST INADDR_LOOPBACK&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define INADDR_LOOPBACK_NET 0x0100007f /* 127.0.0.1 */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define ns2sec(ns) ((ns) / (1000 * 1000 * 1000))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#ifndef memcpy&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#endif&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define MERGE_SEC 10&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">typedef&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u8&lt;/span> &lt;span class="n">opcode&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u8&lt;/span> &lt;span class="n">opsize&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u16&lt;/span> &lt;span class="n">port&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u32&lt;/span> &lt;span class="n">ip&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span> &lt;span class="n">toa_data_t&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">一般&lt;/span> &lt;span class="n">toa&lt;/span> &lt;span class="err">模块里只会填充一个&lt;/span> &lt;span class="n">toa&lt;/span> &lt;span class="err">数据&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define TCP_OPTION_LEN 1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="n">tcp_event&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u32&lt;/span> &lt;span class="n">raddr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u32&lt;/span> &lt;span class="n">laddr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u16&lt;/span> &lt;span class="n">rport&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u16&lt;/span> &lt;span class="n">lport&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="ne">int&lt;/span> &lt;span class="n">err&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">toa_addr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">toa_data_t&lt;/span> &lt;span class="n">toa_data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">sec&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">ns&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">typedef&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="n">tcp_event&lt;/span> &lt;span class="n">tcp_event_t&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">const&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="n">tcp_event&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">unused_0x01&lt;/span> &lt;span class="n">__attribute__&lt;/span>&lt;span class="p">((&lt;/span>&lt;span class="n">unused&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">type&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_MAP_TYPE_LRU_HASH&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">key_size&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">tcp_event_t&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">value_size&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">u64&lt;/span>&lt;span class="p">));&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="n">timestamp&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">max_entries&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1024&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span> &lt;span class="n">tcp_event_map&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;.maps&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">type&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_MAP_TYPE_PERF_EVENT_ARRAY&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__uint&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">max_entries&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1024&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span> &lt;span class="n">events&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;.maps&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">enum&lt;/span> &lt;span class="n">toa_type&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">ipopt_toa&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">254&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">//&lt;/span> &lt;span class="n">IP_v4&lt;/span> &lt;span class="err">客户端&lt;/span> &lt;span class="ne">IP&lt;/span>&lt;span class="err">，目前仅考虑&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define _AF_INET 2 /* internetwork: UDP, TCP, etc. */&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define _IPPROTO_TCP 6&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;kretprobe/inet_csk_accept&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="ne">int&lt;/span> &lt;span class="n">kretprobe__inet_csk_accept&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">struct&lt;/span> &lt;span class="n">pt_regs&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">ctx&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">start_ns&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_ktime_get_ns&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">tcp_event_t&lt;/span> &lt;span class="n">event&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">struct&lt;/span> &lt;span class="n">sock&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">PT_REGS_RC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">NULL&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">sock_common&lt;/span> &lt;span class="n">sk_common&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_probe_read&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="p">),&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="k">const&lt;/span> &lt;span class="n">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_family&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">_AF_INET&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">不处理本地回环&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_rcv_saddr&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">INADDR_LOOPBACK_NET&lt;/span> &lt;span class="o">||&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_daddr&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">INADDR_LOOPBACK_NET&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">laddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_ntohl&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_rcv_saddr&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">raddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_ntohl&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_daddr&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">lport&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_num&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">rport&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_ntohs&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_dport&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="ne">int&lt;/span> &lt;span class="n">err&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">toa_data_t&lt;/span> &lt;span class="n">toa_data&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">TCP_OPTION_LEN&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">{};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">err&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">BPF_CORE_READ_INTO&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sk&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sk_user_data&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">err&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u8&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#pragma unroll&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">i&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">&amp;lt;&lt;/span> &lt;span class="n">TCP_OPTION_LEN&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">i&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">opcode&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">ipopt_toa&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">continue&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">memcpy&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">i&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">toa_data_t&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u32&lt;/span> &lt;span class="n">raddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">raddr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="o">&amp;amp;&amp;amp;&lt;/span> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">port&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">挂载在&lt;/span> &lt;span class="n">lvs&lt;/span> &lt;span class="err">时，&lt;/span>&lt;span class="n">DS&lt;/span> &lt;span class="err">的&lt;/span> &lt;span class="ne">IP&lt;/span> &lt;span class="err">会发生变更。这里也给聚合掉。&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">raddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="n">remote&lt;/span> &lt;span class="n">port&lt;/span> &lt;span class="err">都不要&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">toa_data&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">port&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">rport&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">sec&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">now_ns&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_ktime_get_ns&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">last_ns&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">u64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">bpf_map_lookup_elem&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">tcp_event_map&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">last_ns&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">NULL&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sec&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">ns2sec&lt;/span>&lt;span class="p">((&lt;/span>&lt;span class="n">now_ns&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">last_ns&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">sec&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">MERGE_SEC&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span> &lt;span class="k">else&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sec&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">99&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_map_update_elem&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">tcp_event_map&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">now_ns&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_ANY&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">sec&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">sec&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">raddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">raddr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">u64&lt;/span> &lt;span class="n">end_ns&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">bpf_ktime_get_ns&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">event&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ns&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">end_ns&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="n">start_ns&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">bpf_perf_event_output&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">events&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BPF_F_CURRENT_CPU&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">event&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>以上，周末愉快。&lt;/p></description></item><item><title>ebpf 采集ebpf 采集tag+tcp五元组</title><link>https://liyan-ah.github.io/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/</link><pubDate>Fri, 24 Feb 2023 21:44:49 +0000</pubDate><guid>https://liyan-ah.github.io/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/</guid><description>&lt;blockquote>
+&lt;p>在这里对文章题目作一些说明。笔者想了很长时间也无法给这篇文章想个恰当的表意题目。实际上使用&lt;code>ebpf&lt;/code>来进行服务观测是有在进行的，比如获取目前&lt;code>l1s&lt;/code>上的常见的四元组。但是本文不是介绍这部分可观测实践的。文章希望阐述的场景是：采集请求触发里的一些信息（诸如&lt;code>trace&lt;/code>及其他&lt;code>header&lt;/code>等）并和服务请求下游的传输层五元组(protocol, src-ip, src-port, dst-ip, dst-port)进行关联。这也是最近工作中实际遇到的问题。&lt;/p>
+&lt;/blockquote>
+&lt;p>基于&lt;code>ebpf&lt;/code>的丰富的特性能够获取服务很多的信息，不同特性的组合更是可以达到极强的数据整合能力。比如通过&lt;code>uprobe&lt;/code>便捷的获取业务信息后，结合&lt;code>kprobe&lt;/code>来获取系统调用里的内容，可以获取一般侵入式可观测代码无法获取的内容。笔者最近遇到的一个实际问题是：获取服务&lt;code>A&lt;/code>的接口&lt;code>/a&lt;/code>响应后，向下游&lt;code>B&lt;/code>发起的请求时，所使用的传输层五元组，同时带上结合一些&lt;code>/a&lt;/code>触发时的一些内容，比如&lt;code>caller_fun&lt;/code>或者&lt;code>traceId&lt;/code>。&lt;br>
+这里值得说明的是，用户态请求的是一个域名。域名的解析是在&lt;code>golang&lt;/code>的&lt;code>http&lt;/code>里完成的。但是请注意，&lt;code>golang&lt;/code>发起&lt;code>tcp&lt;/code>请求时，&lt;code>local port&lt;/code>设置的是&lt;code>0&lt;/code>，然后由内核态的&lt;code>tpc&lt;/code>处理来选择一个空闲的&lt;code>port&lt;/code>作为&lt;code>socket&lt;/code>里的&lt;code>lport&lt;/code>。这部分的信息通过代码的埋点显然是无法获取的（详情可参考&lt;a class="link" href="https://mp.weixin.qq.com/s?__biz=MjM5Njg5NDgwNA==&amp;amp;mid=2247485577&amp;amp;idx=1&amp;amp;sn=24220fcc3782f61b4a691585251f1c27&amp;amp;chksm=a6e309b2919480a4696c8a2944ad887951100b5068050d354eab40cf0c8f1124b6367176a0a6&amp;amp;scene=21#wechat_redirect" target="_blank" rel="noopener"
+>TCP连接中客户端的端口号是如何确定的？&lt;/a>）。&lt;br>
+下面介绍下实现效果及思路。&lt;/p>
+&lt;blockquote>
+&lt;p>关于&lt;code>bpftrace&lt;/code>使用的介绍，可以参见：&lt;a class="link" href="https://liyan-ah.github.io/2022/07/22/bpfTrace-%E8%BF%BD%E8%B8%AA-uprobe/#more" target="_blank" rel="noopener"
+>bpftrace 无侵入遍历golang链表&lt;/a>，关于&lt;code>ebpf&lt;/code>来进行数据采集的实践，可以参见&lt;a class="link" href="https://liyan-ah.github.io/2022/10/21/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/" target="_blank" rel="noopener"
+>ebpf采集mysql请求信息及ebpf对应用安全的思考&lt;/a>。&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="实现效果">
+&lt;a href="#%e5%ae%9e%e7%8e%b0%e6%95%88%e6%9e%9c">#&lt;/a>
+实现效果
+&lt;/h1>&lt;p>服务端启动、触发的效果：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># 启动目标服务&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">./&lt;/span>&lt;span class="n">caller_tuple&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">debug&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="n">WARNING&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">Creating&lt;/span> &lt;span class="n">an&lt;/span> &lt;span class="n">Engine&lt;/span> &lt;span class="n">instance&lt;/span> &lt;span class="n">with&lt;/span> &lt;span class="n">the&lt;/span> &lt;span class="n">Logger&lt;/span> &lt;span class="ow">and&lt;/span> &lt;span class="n">Recovery&lt;/span> &lt;span class="n">middleware&lt;/span> &lt;span class="n">already&lt;/span> &lt;span class="n">attached&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">debug&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="n">WARNING&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">Running&lt;/span> &lt;span class="ow">in&lt;/span> &lt;span class="s2">&amp;#34;debug&amp;#34;&lt;/span> &lt;span class="n">mode&lt;/span>&lt;span class="o">.&lt;/span> &lt;span class="n">Switch&lt;/span> &lt;span class="n">to&lt;/span> &lt;span class="s2">&amp;#34;release&amp;#34;&lt;/span> &lt;span class="n">mode&lt;/span> &lt;span class="ow">in&lt;/span> &lt;span class="n">production&lt;/span>&lt;span class="o">.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="n">using&lt;/span> &lt;span class="n">env&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="k">export&lt;/span> &lt;span class="n">GIN_MODE&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">release&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="n">using&lt;/span> &lt;span class="n">code&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">SetMode&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ReleaseMode&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">debug&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="n">GET&lt;/span> &lt;span class="o">/&lt;/span>&lt;span class="n">echo&lt;/span> &lt;span class="o">--&amp;gt;&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Echo&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="mi">3&lt;/span> &lt;span class="n">handlers&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># 这里触发一次接口调用&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">[&lt;/span>&lt;span class="n">GIN&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="mi">2023&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">02&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="mi">24&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="mi">22&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">05&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">29&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="mi">200&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="mf">85.618975&lt;/span>&lt;span class="n">ms&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="mf">127.0&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="mf">0.1&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="n">GET&lt;/span> &lt;span class="s2">&amp;#34;/echo&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>bpftrace&lt;/code> 采集端的效果：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># 启动采集
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bpftrace ./caller.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Attaching 3 probes...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">start to gather caller info.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">get caller path: /echo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># 将 caller_path 和 传输层五元组结合起来（本机的IP实际上是输出的，但是为了信息安全，就使用 0.0.0.0 来代替了）
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">caller info: /echo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">3326691 caller_tuple 0.0.0.0 38610 110.242.68.66 80
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="代码实现">
+&lt;a href="#%e4%bb%a3%e7%a0%81%e5%ae%9e%e7%8e%b0">#&lt;/a>
+代码实现
+&lt;/h1>&lt;p>这里分别上一下目标服务&lt;code>caller_func&lt;/code>以及采集脚本&lt;code>caller.bt&lt;/code>的代码，来说明下实现思路。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt"> 10
+&lt;/span>&lt;span class="lnt"> 11
+&lt;/span>&lt;span class="lnt"> 12
+&lt;/span>&lt;span class="lnt"> 13
+&lt;/span>&lt;span class="lnt"> 14
+&lt;/span>&lt;span class="lnt"> 15
+&lt;/span>&lt;span class="lnt"> 16
+&lt;/span>&lt;span class="lnt"> 17
+&lt;/span>&lt;span class="lnt"> 18
+&lt;/span>&lt;span class="lnt"> 19
+&lt;/span>&lt;span class="lnt"> 20
+&lt;/span>&lt;span class="lnt"> 21
+&lt;/span>&lt;span class="lnt"> 22
+&lt;/span>&lt;span class="lnt"> 23
+&lt;/span>&lt;span class="lnt"> 24
+&lt;/span>&lt;span class="lnt"> 25
+&lt;/span>&lt;span class="lnt"> 26
+&lt;/span>&lt;span class="lnt"> 27
+&lt;/span>&lt;span class="lnt"> 28
+&lt;/span>&lt;span class="lnt"> 29
+&lt;/span>&lt;span class="lnt"> 30
+&lt;/span>&lt;span class="lnt"> 31
+&lt;/span>&lt;span class="lnt"> 32
+&lt;/span>&lt;span class="lnt"> 33
+&lt;/span>&lt;span class="lnt"> 34
+&lt;/span>&lt;span class="lnt"> 35
+&lt;/span>&lt;span class="lnt"> 36
+&lt;/span>&lt;span class="lnt"> 37
+&lt;/span>&lt;span class="lnt"> 38
+&lt;/span>&lt;span class="lnt"> 39
+&lt;/span>&lt;span class="lnt"> 40
+&lt;/span>&lt;span class="lnt"> 41
+&lt;/span>&lt;span class="lnt"> 42
+&lt;/span>&lt;span class="lnt"> 43
+&lt;/span>&lt;span class="lnt"> 44
+&lt;/span>&lt;span class="lnt"> 45
+&lt;/span>&lt;span class="lnt"> 46
+&lt;/span>&lt;span class="lnt"> 47
+&lt;/span>&lt;span class="lnt"> 48
+&lt;/span>&lt;span class="lnt"> 49
+&lt;/span>&lt;span class="lnt"> 50
+&lt;/span>&lt;span class="lnt"> 51
+&lt;/span>&lt;span class="lnt"> 52
+&lt;/span>&lt;span class="lnt"> 53
+&lt;/span>&lt;span class="lnt"> 54
+&lt;/span>&lt;span class="lnt"> 55
+&lt;/span>&lt;span class="lnt"> 56
+&lt;/span>&lt;span class="lnt"> 57
+&lt;/span>&lt;span class="lnt"> 58
+&lt;/span>&lt;span class="lnt"> 59
+&lt;/span>&lt;span class="lnt"> 60
+&lt;/span>&lt;span class="lnt"> 61
+&lt;/span>&lt;span class="lnt"> 62
+&lt;/span>&lt;span class="lnt"> 63
+&lt;/span>&lt;span class="lnt"> 64
+&lt;/span>&lt;span class="lnt"> 65
+&lt;/span>&lt;span class="lnt"> 66
+&lt;/span>&lt;span class="lnt"> 67
+&lt;/span>&lt;span class="lnt"> 68
+&lt;/span>&lt;span class="lnt"> 69
+&lt;/span>&lt;span class="lnt"> 70
+&lt;/span>&lt;span class="lnt"> 71
+&lt;/span>&lt;span class="lnt"> 72
+&lt;/span>&lt;span class="lnt"> 73
+&lt;/span>&lt;span class="lnt"> 74
+&lt;/span>&lt;span class="lnt"> 75
+&lt;/span>&lt;span class="lnt"> 76
+&lt;/span>&lt;span class="lnt"> 77
+&lt;/span>&lt;span class="lnt"> 78
+&lt;/span>&lt;span class="lnt"> 79
+&lt;/span>&lt;span class="lnt"> 80
+&lt;/span>&lt;span class="lnt"> 81
+&lt;/span>&lt;span class="lnt"> 82
+&lt;/span>&lt;span class="lnt"> 83
+&lt;/span>&lt;span class="lnt"> 84
+&lt;/span>&lt;span class="lnt"> 85
+&lt;/span>&lt;span class="lnt"> 86
+&lt;/span>&lt;span class="lnt"> 87
+&lt;/span>&lt;span class="lnt"> 88
+&lt;/span>&lt;span class="lnt"> 89
+&lt;/span>&lt;span class="lnt"> 90
+&lt;/span>&lt;span class="lnt"> 91
+&lt;/span>&lt;span class="lnt"> 92
+&lt;/span>&lt;span class="lnt"> 93
+&lt;/span>&lt;span class="lnt"> 94
+&lt;/span>&lt;span class="lnt"> 95
+&lt;/span>&lt;span class="lnt"> 96
+&lt;/span>&lt;span class="lnt"> 97
+&lt;/span>&lt;span class="lnt"> 98
+&lt;/span>&lt;span class="lnt"> 99
+&lt;/span>&lt;span class="lnt">100
+&lt;/span>&lt;span class="lnt">101
+&lt;/span>&lt;span class="lnt">102
+&lt;/span>&lt;span class="lnt">103
+&lt;/span>&lt;span class="lnt">104
+&lt;/span>&lt;span class="lnt">105
+&lt;/span>&lt;span class="lnt">106
+&lt;/span>&lt;span class="lnt">107
+&lt;/span>&lt;span class="lnt">108
+&lt;/span>&lt;span class="lnt">109
+&lt;/span>&lt;span class="lnt">110
+&lt;/span>&lt;span class="lnt">111
+&lt;/span>&lt;span class="lnt">112
+&lt;/span>&lt;span class="lnt">113
+&lt;/span>&lt;span class="lnt">114
+&lt;/span>&lt;span class="lnt">115
+&lt;/span>&lt;span class="lnt">116
+&lt;/span>&lt;span class="lnt">117
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="o">./&lt;/span>&lt;span class="n">caller_tuple&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">main&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">go&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">package&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;net/http&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;github.com/gin-gonic/gin&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="n">Resp&lt;/span> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Errno&lt;/span> &lt;span class="n">int64&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;errno&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Msg&lt;/span> &lt;span class="n">string&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;msg&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">Echo&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Context&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">req&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">_&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">NewRequest&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">MethodGet&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;http://baidu.com&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">nil&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">client&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Client&lt;/span>&lt;span class="p">{}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">resp&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">client&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Do&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">req&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="n">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">JSON&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">StatusOK&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">Resp&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="n">Errno&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">Msg&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;request error&amp;#34;&lt;/span>&lt;span class="p">})&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">defer&lt;/span> &lt;span class="n">resp&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Body&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Close&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">JSON&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">StatusOK&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">Resp&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="n">Errno&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">Msg&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;ok&amp;#34;&lt;/span>&lt;span class="p">})&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Default&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srv&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">http&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Server&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Addr&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;0.0.0.0:3344&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GET&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/echo&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">Echo&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Handler&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">r&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srv&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">ListenAndServe&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="n">caller_tuple&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">caller&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">bt&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#!/usr/bin/env bpftrace&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#define AF_INET 2&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="n">sock_common&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">union&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__be32&lt;/span> &lt;span class="n">skc_daddr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__be32&lt;/span> &lt;span class="n">skc_rcv_saddr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">union&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">unsigned&lt;/span> &lt;span class="ne">int&lt;/span> &lt;span class="n">skc_hash&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__u16&lt;/span> &lt;span class="n">skc_u16hashes&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">2&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">union&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__be16&lt;/span> &lt;span class="n">skc_dport&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">__u16&lt;/span> &lt;span class="n">skc_num&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">short&lt;/span> &lt;span class="n">unsigned&lt;/span> &lt;span class="ne">int&lt;/span> &lt;span class="n">skc_family&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">struct&lt;/span> &lt;span class="n">sock&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">struct&lt;/span> &lt;span class="n">sock_common&lt;/span> &lt;span class="n">__sk_common&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">};&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">BEGIN&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;start to gather caller info.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;none&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">这里通过&lt;/span> &lt;span class="n">uprobe&lt;/span> &lt;span class="err">来便捷的获取会话信息。同时将信息写入&lt;/span>&lt;span class="n">bpf_map&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">uprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">./&lt;/span>&lt;span class="n">caller_tuple&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;net/http.serverHandler.ServeHTTP&amp;#34;&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">req_ptr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">sarg3&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">method_ptr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_ptr&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">method_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_ptr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">8&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">/*&lt;/span> &lt;span class="n">read&lt;/span> &lt;span class="n">request&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">url&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Path&lt;/span> &lt;span class="o">*/&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">url_ptr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">req_ptr&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">16&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">path_ptr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">url_ptr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">56&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">path_len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">uint64&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">url_ptr&lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="mi">64&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;get caller path: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($path_ptr, $path_len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">//&lt;/span> &lt;span class="err">这里使用&lt;/span> &lt;span class="n">pid&lt;/span> &lt;span class="err">来作为&lt;/span> &lt;span class="n">key&lt;/span> &lt;span class="err">只是为了实现方便。实际可以采取其他更有区分性的内容。&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_ptr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="o">=$&lt;/span>&lt;span class="n">path_ptr&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="o">=$&lt;/span>&lt;span class="n">path_len&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">//&lt;/span> &lt;span class="err">通过&lt;/span> &lt;span class="n">kprobe&lt;/span> &lt;span class="err">来获取用户态无法获取的内容。同时通过&lt;/span> &lt;span class="n">bpf_map&lt;/span> &lt;span class="err">来控制生效及内容的交互。&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">kprobe&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="n">tcp_connect&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="err">@&lt;/span>&lt;span class="n">caller_ptr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">ptr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_ptr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">len&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">];&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;caller info: &lt;/span>&lt;span class="si">%s&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, str($ptr, $len));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_ptr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="err">@&lt;/span>&lt;span class="n">caller_len&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">pid&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">sk&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="n">struct&lt;/span> &lt;span class="n">sock&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="n">arg0&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">inet_family&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_family&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">inet_family&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">AF_INET&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">daddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">ntop&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_daddr&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">saddr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">ntop&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_rcv_saddr&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">lport&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_num&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">dport&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="n">sk&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">__sk_common&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">skc_dport&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">$&lt;/span>&lt;span class="n">dport&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">((((&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">dport&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;gt;&amp;gt;&lt;/span> &lt;span class="mi">8&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;amp;&lt;/span> &lt;span class="mh">0xff&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">|&lt;/span> &lt;span class="p">(((&lt;/span>&lt;span class="o">$&lt;/span>&lt;span class="n">dport&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;amp;&lt;/span> &lt;span class="mh">0xff&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;&amp;lt;&lt;/span> &lt;span class="mi">8&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">%-8d&lt;/span>&lt;span class="s2"> &lt;/span>&lt;span class="si">%-16s&lt;/span>&lt;span class="s2"> &amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">pid&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">comm&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">%-39s&lt;/span>&lt;span class="s2"> &lt;/span>&lt;span class="si">%-6d&lt;/span>&lt;span class="s2"> &lt;/span>&lt;span class="si">%-39s&lt;/span>&lt;span class="s2"> &lt;/span>&lt;span class="si">%-6d&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;, $saddr, $lport, $daddr, $dport);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这样就达到了笔者的目标。这只是&lt;code>ebpf&lt;/code>应用的一个简单的场景，更多的&lt;code>metric&lt;/code>采集内容仍在进行。&lt;br>
+以上，周末愉快！&lt;/p></description></item></channel></rss>

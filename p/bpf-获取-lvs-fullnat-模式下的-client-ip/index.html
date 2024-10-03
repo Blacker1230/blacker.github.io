@@ -1,0 +1,509 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 搞项目。\n观测服务的请求调用需求是客观存在的。一般是需要观测服务的主动发起的调用信息，但是偶尔也会遇到需要观测服务被调用信息的需求。但是一般待采集的服务都是挂载在LVS下面的。这就势必涉及到LVS预设的工作模式下，一般都是FULLNET，需要的real client ip的信息获取方式。\n笔者通过调研，实现了一种通过BPF来观测挂载在LVS下的RS被调用TCP连接信息的方式。本文中关于toa的操作及代码定义均引用自Huawei/TCP_option_address。\n"><title>BPF 获取 LVS FullNat 模式下的 Client IP</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="BPF 获取 LVS FullNat 模式下的 Client IP"><meta property='og:description' content=" 搞项目。\n观测服务的请求调用需求是客观存在的。一般是需要观测服务的主动发起的调用信息，但是偶尔也会遇到需要观测服务被调用信息的需求。但是一般待采集的服务都是挂载在LVS下面的。这就势必涉及到LVS预设的工作模式下，一般都是FULLNET，需要的real client ip的信息获取方式。\n笔者通过调研，实现了一种通过BPF来观测挂载在LVS下的RS被调用TCP连接信息的方式。本文中关于toa的操作及代码定义均引用自Huawei/TCP_option_address。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='lvs'><meta property='article:tag' content='tcp'><meta property='article:tag' content='bpf'><meta property='article:published_time' content='2024-01-03T16:15:00+00:00'><meta property='article:modified_time' content='2024-01-03T16:15:00+00:00'><meta name=twitter:title content="BPF 获取 LVS FullNat 模式下的 Client IP"><meta name=twitter:description content=" 搞项目。\n观测服务的请求调用需求是客观存在的。一般是需要观测服务的主动发起的调用信息，但是偶尔也会遇到需要观测服务被调用信息的需求。但是一般待采集的服务都是挂载在LVS下面的。这就势必涉及到LVS预设的工作模式下，一般都是FULLNET，需要的real client ip的信息获取方式。\n笔者通过调研，实现了一种通过BPF来观测挂载在LVS下的RS被调用TCP连接信息的方式。本文中关于toa的操作及代码定义均引用自Huawei/TCP_option_address。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/bpf-%E8%8E%B7%E5%8F%96-lvs-fullnat-%E6%A8%A1%E5%BC%8F%E4%B8%8B%E7%9A%84-client-ip/>BPF 获取 LVS FullNat 模式下的 Client IP</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jan 03, 2024</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 4 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>搞项目。</p></blockquote><p>观测服务的请求调用需求是客观存在的。一般是需要观测服务的主动发起的调用信息，但是偶尔也会遇到需要观测服务被调用信息的需求。但是一般待采集的服务都是挂载在<code>LVS</code>下面的。这就势必涉及到<code>LVS</code>预设的工作模式下，一般都是<code>FULLNET</code>，需要的<code>real client ip</code>的信息获取方式。<br>笔者通过调研，实现了一种通过<code>BPF</code>来观测挂载在<code>LVS</code>下的<code>RS</code>被调用<code>TCP</code>连接信息的方式。本文中关于<code>toa</code>的操作及代码定义均引用自<a class=link href=https://github.com/Huawei/TCP_option_address/tree/master target=_blank rel=noopener>Huawei/TCP_option_address</a>。</p><h1 id=一效果><a href=#%e4%b8%80%e6%95%88%e6%9e%9c>#</a>
+一、效果</h1><p>先看下采集效果：</p><p><img src=/tcp-accept.png loading=lazy alt="upload successful"></p><h1 id=二lvs-fullnat><a href=#%e4%ba%8clvs-fullnat>#</a>
+二、LVS FullNat</h1><p>关于<code>LVS</code>的<code>Nat</code>,<code>DR</code>,<code>Tun</code>以及<code>FullNat</code>模式的介绍已经有了很多的资料，比如<a class=link href=https://fafucoder.github.io/2021/12/19/linux-lvs/ target=_blank rel=noopener>这篇文章</a>就介绍的很详细。这里笔者附上<code>FullNat</code>模式下的示意图：</p><p><img src=/full-nat.png loading=lazy alt="upload successful"></p><p>如图所示，如果需要在<code>RS</code>上获取<code>CIP</code>，就涉及到<code>TOA</code>信息的解析。<code>TOA (tcp optional address)</code>是利用<code>tcp</code>协议<code>option</code>字段来传递信息的一种工作方式。关于<code>TOA</code>的约定笔者并没有找到官方的<code>RFC</code>文档。只有一些结构的定义。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>/* MUST be 4 bytes alignment */
+</span></span><span class=line><span class=cl>struct toa_data {
+</span></span><span class=line><span class=cl>	__u8 opcode;
+</span></span><span class=line><span class=cl>	__u8 opsize;
+</span></span><span class=line><span class=cl>	__u16 port;
+</span></span><span class=line><span class=cl>	__u32 ip;
+</span></span><span class=line><span class=cl>};
+</span></span></code></pre></td></tr></table></div></div><p>同时，<a class=link href=https://www.rfc-editor.org/rfc/rfc793.txt target=_blank rel=noopener>rfc793</a>里对<code>TCP header</code>的约定如下，理论上<code>toa_data</code>应该写在<code>Options</code>字段中。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>    0                   1                   2                   3   
+</span></span><span class=line><span class=cl>    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |          Source Port          |       Destination Port        |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |                        Sequence Number                        |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |                    Acknowledgment Number                      |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |  Data |           |U|A|P|R|S|F|                               |
+</span></span><span class=line><span class=cl>   | Offset| Reserved  |R|C|S|S|Y|I|            Window             |
+</span></span><span class=line><span class=cl>   |       |           |G|K|H|T|N|N|                               |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |           Checksum            |         Urgent Pointer        |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |                    Options                    |    Padding    |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>   |                             data                              |
+</span></span><span class=line><span class=cl>   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>                            TCP Header Format
+</span></span></code></pre></td></tr></table></div></div><p>一般来说，将<code>real-client ip</code>写入<code>tcp option</code>字段的操作是在<code>LVS</code>上进行的。而解析并且方便<code>RS</code>操作，主要是需要在<code>getname</code>的时候需要返回<code>real-client ip</code>以便于做进一步的业务逻辑，比如按照<code>IP</code>限流等，是<code>RS</code>的<code>toa</code>模块在操作的。一般是在<code>tcp</code>握手的第三个<code>SYN</code>报文处理时，<code>toa.ko</code>通过<code>tcp_v4_syn_recv_sock</code>处理的<code>hook</code>函数方式来触发<code>toa</code>数据的处理。<br>这里附一段这里的逻辑：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span><span class=lnt>68
+</span><span class=lnt>69
+</span><span class=lnt>70
+</span><span class=lnt>71
+</span><span class=lnt>72
+</span><span class=lnt>73
+</span><span class=lnt>74
+</span><span class=lnt>75
+</span><span class=lnt>76
+</span><span class=lnt>77
+</span><span class=lnt>78
+</span><span class=lnt>79
+</span><span class=lnt>80
+</span><span class=lnt>81
+</span><span class=lnt>82
+</span><span class=lnt>83
+</span><span class=lnt>84
+</span><span class=lnt>85
+</span><span class=lnt>86
+</span><span class=lnt>87
+</span><span class=lnt>88
+</span><span class=lnt>89
+</span><span class=lnt>90
+</span><span class=lnt>91
+</span><span class=lnt>92
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>static struct sock *
+</span></span><span class=line><span class=cl>tcp_v4_syn_recv_sock_toa(struct sock *sk, struct sk_buff *skb,
+</span></span><span class=line><span class=cl>			struct request_sock *req, struct dst_entry *dst)
+</span></span><span class=line><span class=cl>#endif
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>	struct sock *newsock = NULL;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	TOA_DBG(&#34;tcp_v4_syn_recv_sock_toa called
+</span></span><span class=line><span class=cl>&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	/* call orginal one */
+</span></span><span class=line><span class=cl>#if LINUX_VERSION_CODE &gt;= KERNEL_VERSION(4,4,0)
+</span></span><span class=line><span class=cl>	newsock = tcp_v4_syn_recv_sock(sk, skb, req, dst, req_unhash, own_req);
+</span></span><span class=line><span class=cl>#else
+</span></span><span class=line><span class=cl>	newsock = tcp_v4_syn_recv_sock(sk, skb, req, dst);
+</span></span><span class=line><span class=cl>#endif
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	/* set our value if need */
+</span></span><span class=line><span class=cl>	if (NULL != newsock &amp;&amp; NULL == newsock-&gt;sk_user_data) {
+</span></span><span class=line><span class=cl>		newsock-&gt;sk_user_data = get_toa_data(skb);
+</span></span><span class=line><span class=cl>		if (NULL != newsock-&gt;sk_user_data)
+</span></span><span class=line><span class=cl>			TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_TOA_CNT);
+</span></span><span class=line><span class=cl>		else
+</span></span><span class=line><span class=cl>			TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_NO_TOA_CNT);
+</span></span><span class=line><span class=cl>		TOA_DBG(&#34;tcp_v4_syn_recv_sock_toa: set &#34;
+</span></span><span class=line><span class=cl>			&#34;sk-&gt;sk_user_data to %p
+</span></span><span class=line><span class=cl>&#34;,
+</span></span><span class=line><span class=cl>			newsock-&gt;sk_user_data);
+</span></span><span class=line><span class=cl>	}
+</span></span><span class=line><span class=cl>	return newsock;
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>static void *get_toa_data(struct sk_buff *skb)
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>	struct tcphdr *th;
+</span></span><span class=line><span class=cl>	int length;
+</span></span><span class=line><span class=cl>	unsigned char *ptr;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	struct toa_data tdata;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	void *ret_ptr = NULL;
+</span></span><span class=line><span class=cl>	unsigned char buff[(15 * 4) - sizeof(struct tcphdr)];
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	TOA_DBG(&#34;get_toa_data called
+</span></span><span class=line><span class=cl>&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	if (NULL != skb) {
+</span></span><span class=line><span class=cl>		th = tcp_hdr(skb);
+</span></span><span class=line><span class=cl>		length = (th-&gt;doff * 4) - sizeof(struct tcphdr);
+</span></span><span class=line><span class=cl>		ptr = skb_header_pointer(skb, sizeof(struct tcphdr),
+</span></span><span class=line><span class=cl>					length, buff);
+</span></span><span class=line><span class=cl>		if (!ptr)
+</span></span><span class=line><span class=cl>			return NULL;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>		while (length &gt; 0) {
+</span></span><span class=line><span class=cl>			int opcode = *ptr++;
+</span></span><span class=line><span class=cl>			int opsize;
+</span></span><span class=line><span class=cl>			switch (opcode) {
+</span></span><span class=line><span class=cl>			case TCPOPT_EOL:
+</span></span><span class=line><span class=cl>				return NULL;
+</span></span><span class=line><span class=cl>			case TCPOPT_NOP:	/* Ref: RFC 793 section 3.1 */
+</span></span><span class=line><span class=cl>				length--;
+</span></span><span class=line><span class=cl>				continue;
+</span></span><span class=line><span class=cl>			default:
+</span></span><span class=line><span class=cl>				opsize = *ptr++;
+</span></span><span class=line><span class=cl>				if (opsize &lt; 2)	/* &#34;silly options&#34; */
+</span></span><span class=line><span class=cl>					return NULL;
+</span></span><span class=line><span class=cl>				if (opsize &gt; length)
+</span></span><span class=line><span class=cl>					/* don&#39;t parse partial options */
+</span></span><span class=line><span class=cl>					return NULL;
+</span></span><span class=line><span class=cl>				if (TCPOPT_TOA == opcode &amp;&amp;  // 254
+</span></span><span class=line><span class=cl>				    TCPOLEN_TOA == opsize) {  // 8
+</span></span><span class=line><span class=cl>					memcpy(&amp;tdata, ptr - 2, sizeof(tdata));
+</span></span><span class=line><span class=cl>					TOA_DBG(&#34;find toa data: ip = &#34;
+</span></span><span class=line><span class=cl>						&#34;%u.%u.%u.%u, port = %u
+</span></span><span class=line><span class=cl>&#34;,
+</span></span><span class=line><span class=cl>						NIPQUAD(tdata.ip),
+</span></span><span class=line><span class=cl>						ntohs(tdata.port));
+</span></span><span class=line><span class=cl>					memcpy(&amp;ret_ptr, &amp;tdata,
+</span></span><span class=line><span class=cl>						sizeof(ret_ptr));
+</span></span><span class=line><span class=cl>					TOA_DBG(&#34;coded toa data: %p
+</span></span><span class=line><span class=cl>&#34;,
+</span></span><span class=line><span class=cl>						ret_ptr);
+</span></span><span class=line><span class=cl>					return ret_ptr;
+</span></span><span class=line><span class=cl>				}
+</span></span><span class=line><span class=cl>				ptr += opsize - 2;
+</span></span><span class=line><span class=cl>				length -= opsize;
+</span></span><span class=line><span class=cl>			}
+</span></span><span class=line><span class=cl>		}
+</span></span><span class=line><span class=cl>	}
+</span></span><span class=line><span class=cl>	return NULL;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>可以看到，这里首先调用了原有的<code>tcp_v4_syn_recv_sock</code>函数，并且在<code>sk_user_data</code>未被占用的情况下，通过<code>get_toa_data</code>的方式，从原始的<code>skb</code>中将<code>toa</code>信息解析出来，并将数据赋值给<code>sk->sk_user_data</code>。<br>虽然这部分逻辑并不完全理解，但是从逻辑来看，只要读取<code>sk_user_data</code>并且判断其中是否有符合条件的值，即可获取<code>real-client ip</code>。<br>至此，基本的逻辑就梳理出来了。对应的<code>BPF</code>处理逻辑也就很清晰了。</p><h1 id=三bpf-逻辑><a href=#%e4%b8%89bpf-%e9%80%bb%e8%be%91>#</a>
+三、BPF 逻辑</h1><p>直接上代码：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span><span class=lnt>105
+</span><span class=lnt>106
+</span><span class=lnt>107
+</span><span class=lnt>108
+</span><span class=lnt>109
+</span><span class=lnt>110
+</span><span class=lnt>111
+</span><span class=lnt>112
+</span><span class=lnt>113
+</span><span class=lnt>114
+</span><span class=lnt>115
+</span><span class=lnt>116
+</span><span class=lnt>117
+</span><span class=lnt>118
+</span><span class=lnt>119
+</span><span class=lnt>120
+</span><span class=lnt>121
+</span><span class=lnt>122
+</span><span class=lnt>123
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=c1>#define INADDR_LOOPBACK      0x7f000001 /* 127.0.0.1   */</span>
+</span></span><span class=line><span class=cl><span class=c1>#define INADDR_LOOPBACK_HOST INADDR_LOOPBACK</span>
+</span></span><span class=line><span class=cl><span class=c1>#define INADDR_LOOPBACK_NET  0x0100007f /* 127.0.0.1   */</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#define ns2sec(ns) ((ns) / (1000 * 1000 * 1000))</span>
+</span></span><span class=line><span class=cl><span class=c1>#ifndef memcpy</span>
+</span></span><span class=line><span class=cl><span class=c1>#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))</span>
+</span></span><span class=line><span class=cl><span class=c1>#endif</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#define MERGE_SEC 10</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>typedef</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>u8</span>  <span class=n>opcode</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u8</span>  <span class=n>opsize</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u16</span> <span class=n>port</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span> <span class=n>ip</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span> <span class=n>toa_data_t</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>//</span> <span class=err>一般</span> <span class=n>toa</span> <span class=err>模块里只会填充一个</span> <span class=n>toa</span> <span class=err>数据</span>
+</span></span><span class=line><span class=cl><span class=c1>#define TCP_OPTION_LEN 1</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=n>tcp_event</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span>        <span class=n>raddr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span>        <span class=n>laddr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u16</span>        <span class=n>rport</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u16</span>        <span class=n>lport</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=ne>int</span>        <span class=n>err</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>        <span class=n>toa_addr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>toa_data_t</span> <span class=n>toa_data</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>        <span class=n>sec</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>        <span class=n>ns</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl><span class=n>typedef</span> <span class=n>struct</span> <span class=n>tcp_event</span> <span class=n>tcp_event_t</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=k>const</span> <span class=n>struct</span> <span class=n>tcp_event</span><span class=o>*</span>  <span class=n>unused_0x01</span> <span class=n>__attribute__</span><span class=p>((</span><span class=n>unused</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>type</span><span class=p>,</span> <span class=n>BPF_MAP_TYPE_LRU_HASH</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>key_size</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>tcp_event_t</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>value_size</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>u64</span><span class=p>));</span> <span class=o>//</span> <span class=n>timestamp</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>max_entries</span><span class=p>,</span> <span class=mi>1024</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span> <span class=n>tcp_event_map</span> <span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;.maps&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>type</span><span class=p>,</span> <span class=n>BPF_MAP_TYPE_PERF_EVENT_ARRAY</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>__uint</span><span class=p>(</span><span class=n>max_entries</span><span class=p>,</span> <span class=mi>1024</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span> <span class=n>events</span> <span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;.maps&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>enum</span> <span class=n>toa_type</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>ipopt_toa</span>        <span class=o>=</span> <span class=mi>254</span><span class=p>,</span> <span class=o>//</span> <span class=n>IP_v4</span> <span class=err>客户端</span> <span class=ne>IP</span><span class=err>，目前仅考虑</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#define _AF_INET     2 /* internetwork: UDP, TCP, etc. */</span>
+</span></span><span class=line><span class=cl><span class=c1>#define _IPPROTO_TCP 6</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>SEC</span><span class=p>(</span><span class=s2>&#34;kretprobe/inet_csk_accept&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=ne>int</span> <span class=n>kretprobe__inet_csk_accept</span><span class=p>(</span><span class=n>struct</span> <span class=n>pt_regs</span><span class=o>*</span> <span class=n>ctx</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>          <span class=n>start_ns</span> <span class=o>=</span> <span class=n>bpf_ktime_get_ns</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>tcp_event_t</span>  <span class=n>event</span>    <span class=o>=</span> <span class=p>{};</span>
+</span></span><span class=line><span class=cl>  <span class=n>struct</span> <span class=n>sock</span><span class=o>*</span> <span class=n>sk</span>       <span class=o>=</span> <span class=p>(</span><span class=n>struct</span> <span class=n>sock</span><span class=o>*</span><span class=p>)</span><span class=n>PT_REGS_RC</span><span class=p>(</span><span class=n>ctx</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>sk</span> <span class=o>==</span> <span class=n>NULL</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>struct</span> <span class=n>sock_common</span> <span class=n>sk_common</span> <span class=o>=</span> <span class=p>{};</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_probe_read</span><span class=p>(</span><span class=o>&amp;</span><span class=n>sk_common</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>sk_common</span><span class=p>),</span> <span class=p>(</span><span class=k>const</span> <span class=n>void</span><span class=o>*</span><span class=p>)(</span><span class=n>sk</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>sk_common</span><span class=o>.</span><span class=n>skc_family</span> <span class=o>!=</span> <span class=n>_AF_INET</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=err>不处理本地回环</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>sk_common</span><span class=o>.</span><span class=n>skc_rcv_saddr</span> <span class=o>==</span> <span class=n>INADDR_LOOPBACK_NET</span> <span class=o>||</span>
+</span></span><span class=line><span class=cl>      <span class=n>sk_common</span><span class=o>.</span><span class=n>skc_daddr</span> <span class=o>==</span> <span class=n>INADDR_LOOPBACK_NET</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>laddr</span> <span class=o>=</span> <span class=n>bpf_ntohl</span><span class=p>(</span><span class=n>sk_common</span><span class=o>.</span><span class=n>skc_rcv_saddr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>raddr</span> <span class=o>=</span> <span class=n>bpf_ntohl</span><span class=p>(</span><span class=n>sk_common</span><span class=o>.</span><span class=n>skc_daddr</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>lport</span> <span class=o>=</span> <span class=n>sk_common</span><span class=o>.</span><span class=n>skc_num</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>rport</span> <span class=o>=</span> <span class=n>bpf_ntohs</span><span class=p>(</span><span class=n>sk_common</span><span class=o>.</span><span class=n>skc_dport</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=ne>int</span>        <span class=n>err</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>toa_data_t</span> <span class=n>toa_data</span><span class=p>[</span><span class=n>TCP_OPTION_LEN</span><span class=p>]</span> <span class=o>=</span> <span class=p>{};</span>
+</span></span><span class=line><span class=cl>  <span class=n>err</span> <span class=o>=</span> <span class=n>BPF_CORE_READ_INTO</span><span class=p>(</span><span class=o>&amp;</span><span class=n>toa_data</span><span class=p>,</span> <span class=n>sk</span><span class=p>,</span> <span class=n>sk_user_data</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>err</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>u8</span> <span class=n>i</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=c1>#pragma unroll</span>
+</span></span><span class=line><span class=cl>  <span class=k>for</span> <span class=p>(</span><span class=n>i</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span> <span class=n>i</span> <span class=o>&lt;</span> <span class=n>TCP_OPTION_LEN</span><span class=p>;</span> <span class=n>i</span><span class=o>++</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>if</span> <span class=p>(</span><span class=n>toa_data</span><span class=p>[</span><span class=n>i</span><span class=p>]</span><span class=o>.</span><span class=n>opcode</span> <span class=o>!=</span> <span class=n>ipopt_toa</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=k>continue</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=n>memcpy</span><span class=p>(</span><span class=o>&amp;</span><span class=n>event</span><span class=o>.</span><span class=n>toa_data</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>toa_data</span><span class=p>[</span><span class=n>i</span><span class=p>],</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>toa_data_t</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=n>u32</span> <span class=n>raddr</span> <span class=o>=</span> <span class=n>event</span><span class=o>.</span><span class=n>raddr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>event</span><span class=o>.</span><span class=n>toa_data</span><span class=o>.</span><span class=n>ip</span> <span class=o>!=</span> <span class=mi>0</span> <span class=o>&amp;&amp;</span> <span class=n>event</span><span class=o>.</span><span class=n>toa_data</span><span class=o>.</span><span class=n>port</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=o>//</span> <span class=err>挂载在</span> <span class=n>lvs</span> <span class=err>时，</span><span class=n>DS</span> <span class=err>的</span> <span class=ne>IP</span> <span class=err>会发生变更。这里也给聚合掉。</span>
+</span></span><span class=line><span class=cl>    <span class=n>event</span><span class=o>.</span><span class=n>raddr</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=o>//</span> <span class=n>remote</span> <span class=n>port</span> <span class=err>都不要</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>toa_data</span><span class=o>.</span><span class=n>port</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>rport</span>         <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>  <span class=n>sec</span>            <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span>  <span class=n>now_ns</span>         <span class=o>=</span> <span class=n>bpf_ktime_get_ns</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span><span class=o>*</span> <span class=n>last_ns</span>        <span class=o>=</span> <span class=p>(</span><span class=n>u64</span><span class=o>*</span><span class=p>)</span><span class=n>bpf_map_lookup_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>tcp_event_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>event</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=k>if</span> <span class=p>(</span><span class=n>last_ns</span> <span class=o>!=</span> <span class=n>NULL</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>sec</span> <span class=o>=</span> <span class=n>ns2sec</span><span class=p>((</span><span class=n>now_ns</span> <span class=o>-</span> <span class=o>*</span><span class=n>last_ns</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>    <span class=k>if</span> <span class=p>(</span><span class=n>sec</span> <span class=o>&lt;=</span> <span class=n>MERGE_SEC</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span> <span class=k>else</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>sec</span> <span class=o>=</span> <span class=mi>99</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_map_update_elem</span><span class=p>(</span><span class=o>&amp;</span><span class=n>tcp_event_map</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>event</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>now_ns</span><span class=p>,</span> <span class=n>BPF_ANY</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>sec</span>   <span class=o>=</span> <span class=n>sec</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>raddr</span> <span class=o>=</span> <span class=n>raddr</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>  <span class=n>u64</span> <span class=n>end_ns</span>  <span class=o>=</span> <span class=n>bpf_ktime_get_ns</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>  <span class=n>event</span><span class=o>.</span><span class=n>ns</span>    <span class=o>=</span> <span class=n>end_ns</span> <span class=o>-</span> <span class=n>start_ns</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=n>bpf_perf_event_output</span><span class=p>(</span><span class=n>ctx</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>events</span><span class=p>,</span> <span class=n>BPF_F_CURRENT_CPU</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>event</span><span class=p>,</span> <span class=n>sizeof</span><span class=p>(</span><span class=n>event</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>以上，周末愉快。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/lvs/>Lvs</a>
+<a href=/tags/tcp/>Tcp</a>
+<a href=/tags/bpf/>Bpf</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/ebpf-tail-calls%E7%A4%BA%E4%BE%8B/><div class=article-details><h2 class=article-title>eBPF tail-calls示例</h2></div></a></article><article><a href=/p/ebpf-%E9%87%87%E9%9B%86ebpf-%E9%87%87%E9%9B%86tag-tcp%E4%BA%94%E5%85%83%E7%BB%84/><div class=article-details><h2 class=article-title>ebpf 采集ebpf 采集tag+tcp五元组</h2></div></a></article><article><a href=/p/ebpf%E9%87%87%E9%9B%86mysql%E8%AF%B7%E6%B1%82%E4%BF%A1%E6%81%AF%E5%8F%8Aebpf%E5%AF%B9%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8%E7%9A%84%E6%80%9D%E8%80%83/><div class=article-details><h2 class=article-title>ebpf采集mysql请求信息及ebpf对应用安全的思考</h2></div></a></article><article><a href=/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/><div class=article-details><h2 class=article-title>bpftrace 无侵入遍历golang链表</h2></div></a></article><article><a href=/p/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/><div class=article-details><h2 class=article-title>golang 常见类型字节数</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>

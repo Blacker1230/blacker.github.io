@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Uprobe on 李岩</title><link>https://liyan-ah.github.io/tags/uprobe/</link><description>Recent content in Uprobe on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Fri, 22 Jul 2022 21:48:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/uprobe/index.xml" rel="self" type="application/rss+xml"/><item><title>bpftrace 无侵入遍历golang链表</title><link>https://liyan-ah.github.io/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/</link><pubDate>Fri, 22 Jul 2022 21:48:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/bpftrace-%E6%97%A0%E4%BE%B5%E5%85%A5%E9%81%8D%E5%8E%86golang%E9%93%BE%E8%A1%A8/</guid><description>&lt;blockquote>
+&lt;p>&lt;code>bpftrace&lt;/code> 基于 &lt;code>bcc&lt;/code> 进行开发的工具，语法简洁、功能强大。用其分析&lt;code>Linux&lt;/code> 环境下的程序会很方便。本文构造了一个入参为链表头节点的函数使用场景，通过使用&lt;code>bpftrace&lt;/code>无侵入遍历链表成员的方式，介绍&lt;code>bpftrace&lt;/code> &lt;code>attach uprobe&lt;/code> 的使用。更多使用说明见:&lt;a class="link" href="https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md" target="_blank" rel="noopener"
+>bpftrace官网使用文档&lt;/a>&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="执行结果">
+&lt;a href="#%e6%89%a7%e8%a1%8c%e7%bb%93%e6%9e%9c">#&lt;/a>
+执行结果
+&lt;/h1>&lt;p>下面直接给出执行结果。可以看到，通过&lt;code>bpftrace&lt;/code>脚本输出的结果与代码中实际遍历的结果相同。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">sudo ./handle.bt // 先启动监听
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Attaching 1 probe... // 启动后停止在这里
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">=== enter main.handle. // 目标程序执行后输出
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Alice
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">age : 10
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Bob
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">age : 11
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name: Claire
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">age : 12
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">=== total node: 3
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./demo // 再执行目标程序
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cur name: Alice, cur aget: 10
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cur name: Bob, cur aget: 11
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cur name: Claire, cur aget: 12
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="示例说明">
+&lt;a href="#%e7%a4%ba%e4%be%8b%e8%af%b4%e6%98%8e">#&lt;/a>
+示例说明
+&lt;/h1>&lt;p>系统环境如下：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">Linux 4.18.0-193.6.3.el8_2.v1.2.x86_64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bpftrace v0.14.0-72-g6761-dirty
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">go version go1.16.15 linux/amd64
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>示例环境目录：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── demo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── go.mod
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── handle.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">└── main.go
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>其中：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// main.go
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="kn">package&lt;/span> &lt;span class="nx">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kn">import&lt;/span> &lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s">&amp;#34;context&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kd">type&lt;/span> &lt;span class="nx">Student&lt;/span> &lt;span class="kd">struct&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Name&lt;/span> &lt;span class="kt">string&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Age&lt;/span> &lt;span class="kt">int64&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">// Comment [600]Byte 这样会使得这个问题变得很麻烦，hhh
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nx">Next&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">Student&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// 添加如下配置以防止函数被编译优化掉
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">//go:noinline
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="kd">func&lt;/span> &lt;span class="nf">handle&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">ctx&lt;/span> &lt;span class="nx">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Context&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">student&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">Student&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="nx">cur&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="nx">student&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="nx">cur&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="kc">nil&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="nx">cur&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">cur&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Next&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">fmt&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">Printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;cur name: %s, cur aget: %d
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">cur&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Name&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">cur&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Age&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kd">func&lt;/span> &lt;span class="nf">main&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">first&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="nx">Student&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Name&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s">&amp;#34;Alice&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Age&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">10&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Next&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="nx">Student&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Name&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s">&amp;#34;Bob&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Age&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">11&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Next&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="nx">Student&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Name&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s">&amp;#34;Claire&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Age&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">13&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nx">Next&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="kc">nil&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}}}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">handle&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">Background&lt;/span>&lt;span class="p">(),&lt;/span> &lt;span class="nx">first&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">// handle.bt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#!/bin/bpftrace
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">// 当目标结构体较小时(使得整体栈开销 &amp;lt; 512Byte)，可以直接构造使用
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">struct student{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 name_ptr;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> u64 name_length;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> long age;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> struct student *next;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">};
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">uprobe:./demo:&amp;#34;main.handle&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;=== enter main.handle.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $cur = (struct student *)sarg2;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if ($cur == 0){
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;input param is nil.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $node_count = 1;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> unroll(10){ // 这里定义的最大节点数量为10
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;name: %s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;, str($cur-&amp;gt;name_ptr, $cur-&amp;gt;name_length));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;age : %d
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;, $cur-&amp;gt;age);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $cur = $cur-&amp;gt;next;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if ($cur == 0){
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;=== total node: %d
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;, $node_count);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> $node_count += 1;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;==== meet max
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&amp;#34;);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>在编译完成&lt;code>main.go&lt;/code>后，通过&lt;code>sudo bpftrace -l &amp;quot;uprobe:./demo:*&amp;quot; &amp;gt; uprobe.info&lt;/code>的方式，可以获取&lt;code>demo&lt;/code>中所有可以&lt;code>attach&lt;/code>的&lt;code>uprobe&lt;/code>信息。这里说明下取&lt;code>student*&lt;/code>指针值时，为什么取&lt;code>sarg3&lt;/code>。&lt;code>bpftrace&lt;/code>中对内存传参的参数支持是&lt;code>sarg0, sarg1, sarg2...&lt;/code>，且每个参数实际只对应&lt;code>8Byte&lt;/code>大小的空间。对于&lt;code>func handle(ctx context.Context, student *Student)&lt;/code>函数来说，由于&lt;code>context.Context&lt;/code>实际占用&lt;code>2*8Byte&lt;/code>的空间（见&lt;a class="link" href="https://blacker1230.github.io/2022/06/06/golang-%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E5%AD%97%E8%8A%82%E6%95%B0/" target="_blank" rel="noopener"
+>golang常见类型字节数&lt;/a>)，因此需要使用&lt;code>sarg2&lt;/code>来取&lt;code>student&lt;/code>的值，而非直觉上的&lt;code>sarg1&lt;/code>。&lt;br>
+整个过程比较简单、明了。只要拥有&lt;code>root&lt;/code>权限，基本上可以对系统内的任何进程进行详细的分析。&lt;/p></description></item></channel></rss>

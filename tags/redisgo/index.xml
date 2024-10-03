@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Redisgo on 李岩</title><link>https://liyan-ah.github.io/tags/redisgo/</link><description>Recent content in Redisgo on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Wed, 18 Aug 2021 17:26:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/redisgo/index.xml" rel="self" type="application/rss+xml"/><item><title>redisgo 连接报错</title><link>https://liyan-ah.github.io/p/redisgo-%E8%BF%9E%E6%8E%A5%E6%8A%A5%E9%94%99/</link><pubDate>Wed, 18 Aug 2021 17:26:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/redisgo-%E8%BF%9E%E6%8E%A5%E6%8A%A5%E9%94%99/</guid><description>&lt;blockquote>
+&lt;p>记一次&lt;code>redisgo&lt;/code>库使用时，连接远程&lt;code>redis&lt;/code>服务写数据报错的问题。&lt;/p>
+&lt;/blockquote>
+&lt;p>&lt;code>redis&lt;/code>写数据时，出现报错&lt;code>write: broken pipe&lt;/code>及&lt;code>write: connection reset by peer&lt;/code>。看着都是网络的问题，使用&lt;code>redis-cli&lt;/code>可以登陆并且执行查询等操作。经过排查，是写的数据量过大，导致写数据持续时间过长，排查的思路是猜想-&amp;gt;验证&lt;code>@A@&lt;/code>。&lt;br>
+对于多个数据可以进行拆分。对于单个完整的数据，还没有太好的拆分思路（或许基于 &lt;code>pb&lt;/code> 进行压缩，会是个好方式？）&lt;/p>
+&lt;h1 id="参考文章">
+&lt;a href="#%e5%8f%82%e8%80%83%e6%96%87%e7%ab%a0">#&lt;/a>
+参考文章
+&lt;/h1>&lt;p>&lt;a class="link" href="https://blog.csdn.net/xieganyu3460/article/details/82884346" target="_blank" rel="noopener"
+>python redis读写报错：Broken Pipe Error Redis&lt;/a>&lt;/p></description></item></channel></rss>

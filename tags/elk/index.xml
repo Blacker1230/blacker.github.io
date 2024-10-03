@@ -1,0 +1,457 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Elk on 李岩</title><link>https://liyan-ah.github.io/tags/elk/</link><description>Recent content in Elk on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Tue, 04 Jan 2022 00:06:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/elk/index.xml" rel="self" type="application/rss+xml"/><item><title>ELK-docker 实践</title><link>https://liyan-ah.github.io/p/elk-docker-%E5%AE%9E%E8%B7%B5/</link><pubDate>Tue, 04 Jan 2022 00:06:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/elk-docker-%E5%AE%9E%E8%B7%B5/</guid><description>&lt;h1 id="elk-docker-部署实践">
+&lt;a href="#elk-docker-%e9%83%a8%e7%bd%b2%e5%ae%9e%e8%b7%b5">#&lt;/a>
+ELK docker 部署实践
+&lt;/h1>&lt;blockquote>
+&lt;p>本文主要对 ELK 套件中的 filebeat, logstash, elasticsearch 的安装进行实践，以及简单运行。&lt;/p>
+&lt;/blockquote>
+&lt;!-- more -->
+&lt;h1 id="elasticsearch-安装">
+&lt;a href="#elasticsearch-%e5%ae%89%e8%a3%85">#&lt;/a>
+Elasticsearch 安装
+&lt;/h1>&lt;p>这里参照官网给出的&lt;code>docker-compose.yml&lt;/code>文件设置&lt;code>elasticsearch&lt;/code>集群。&lt;code>elastisearch&lt;/code>支持&lt;code>single-node&lt;/code>及&lt;code>multi node cluster&lt;/code>两种部署模式。在本文中，实际上两种方式都能达到效果。使用&lt;code>single-node&lt;/code>启动的环境，查看集群状态时会出现&lt;code>status:yellow&lt;/code>。将&lt;code>docker-compose.yml&lt;/code>文件放置在一个单独的目录下，然后创建&lt;code>data01, data02, data03&lt;/code>目录。依据实际需要，还可创建&lt;code>plugins&lt;/code>目录映射。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">version: &amp;#39;2&amp;#39;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">services:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> es01:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> container_name: es01
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> image: docker.elastic.co/elasticsearch/elasticsearch:7.15.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ports:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - 9200:9200
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - 9300:9300
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> volumes:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - ./data01:/usr/share/elasticsearch/data
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> environment:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - node.name=es01
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - cluster.name=es-docker-cluster
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - discovery.seed_hosts=es02
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - cluster.initial_master_nodes=es01,es02
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - bootstrap.memory_lock=true
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - &amp;#34;ES_JAVA_OPTS=-Xms128m -Xmx128m&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ulimits:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> memlock:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> soft: -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> hard: -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - elastic
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> es02:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> container_name: es02
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> image: docker.elastic.co/elasticsearch/elasticsearch:7.15.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> environment:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - node.name=es02
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - cluster.name=es-docker-cluster
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - discovery.seed_hosts=es01
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - cluster.initial_master_nodes=es01,es02
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - bootstrap.memory_lock=true
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - &amp;#34;ES_JAVA_OPTS=-Xms128m -Xmx128m&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> volumes:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - ./data02:/usr/share/elasticsearch/data
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ulimits:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> memlock:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> soft: -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> hard: -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - elastic
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> es03:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> container_name: es03
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> image: docker.elastic.co/elasticsearch/elasticsearch:7.15.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> environment:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - node.name=es03
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - cluster.name=es-docker-cluster
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - discovery.seed_hosts=es01,es02
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - cluster.initial_master_nodes=es01,es02,es03
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - bootstrap.memory_lock=true
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - &amp;#34;ES_JAVA_OPTS=-Xms128m -Xmx128m&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> volumes:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - data03:/usr/share/elasticsearch/data
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ulimits:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> memlock:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> soft: -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> hard: -1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - elastic
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">volumes:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> data01:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> driver: local
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> data02:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> driver: local
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> data03:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> driver: local
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> elastic:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> driver: bridge
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> external: true
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>注意这里将集群的网络设置为&lt;code>external&lt;/code>，这样后续的&lt;code>logstash&lt;/code>才能找到服务节点。此外，由于笔者的机器可用存储较小，因此设置&lt;code>es&lt;/code>的存储占用设置为&lt;code>128m&lt;/code>。实际使用时，可以按照需求进行调整。
+运行&lt;code>docker-compose up -d&lt;/code>即可后台启动。启动后，&lt;code>curl -X GET &amp;quot;localhost:9200/_cat/nodes?v=true&amp;amp;pretty&amp;quot;&lt;/code> 判断集群状态。&lt;/p>
+&lt;h1 id="logstash-安装">
+&lt;a href="#logstash-%e5%ae%89%e8%a3%85">#&lt;/a>
+Logstash 安装
+&lt;/h1>&lt;blockquote>
+&lt;p>collect, parse transform logs&lt;/p>
+&lt;/blockquote>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">version: &amp;#39;2&amp;#39;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">services:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> logstash:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> image: docker.elastic.co/logstash/logstash:7.15.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> container_name: logstash
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> user: root
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ports:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - 5004:5004
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> volumes:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - ./config:/usr/share/logstash/config/
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - /etc/localtime:/etc/localtime
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> command: bash -c &amp;#34;cd /usr/share/logstash &amp;amp;&amp;amp; logstash -f config/online.conf&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - elastic
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> elastic:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> driver: bridge
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> external: true
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># ./config/online.conf
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">input {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # 这里支持多种 input
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> beats {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> port =&amp;gt; 5004
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> codec =&amp;gt; &amp;#34;json&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">filter {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # 这里基于 ruby 脚本进行过滤
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ruby {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> path =&amp;gt; &amp;#34;./config/filter.rb&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">output {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # 这里将过滤后的结果输出到标准输出及 es 中
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> stdout {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> codec =&amp;gt; json
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> elasticsearch {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> hosts =&amp;gt; [&amp;#34;es01:9200&amp;#34;]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> index =&amp;gt; &amp;#34;logstash&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> #user =&amp;gt; &amp;#34;&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> #password =&amp;gt; &amp;#34;&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># config/filter.rb
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># 按照 online.conf 中的配置，logstash 启动后，会读取 filter.rb，并使用 filter 函数作为过滤函数。
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">require &amp;#34;json&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">BEGIN{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> puts &amp;#34;start event filter&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">END{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> puts &amp;#34;end event filter&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">def filter(event)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> puts event
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if event.get(&amp;#34;[errno]&amp;#34;) != 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return []
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> end
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> valid_age = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> event.get(&amp;#34;[data]&amp;#34;).each{ | info |
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if info[&amp;#34;age&amp;#34;] &amp;lt; 10
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> valid_age += info[&amp;#34;age&amp;#34;]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> end
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> event.set(&amp;#34;[data]&amp;#34;, valid_age)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return [event]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">end
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>logstash 启动后，会监听容器内的 &lt;code>5004&lt;/code> 接口（配置于&lt;code>online.conf&lt;/code>中），如果有信息传入，则会经过&lt;code>filter.rb&lt;/code>中的 &lt;code>filter()&lt;/code> 函数对数据进行处理。而后输出到标准输出及 &lt;code>es01&lt;/code>容器&lt;code>5004&lt;/code>端口的&lt;code>elasticsearch&lt;/code>服务。由于&lt;code>elasticsearch&lt;/code>及&lt;code>logstash&lt;/code>容器使用了相同的网络，因此可以互相感知。&lt;/p>
+&lt;h1 id="filebeat-安装">
+&lt;a href="#filebeat-%e5%ae%89%e8%a3%85">#&lt;/a>
+filebeat 安装
+&lt;/h1>&lt;blockquote>
+&lt;p>filebeat 作为轻量级的日志收集器，仅占用很少的资源，即可完成日志的采集，并且转发至配置的&lt;code>logstash&lt;/code>进行后续的处理、归档等操作。&lt;/p>
+&lt;/blockquote>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">version: &amp;#39;2&amp;#39;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">services:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> filebeat:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> image: docker.elastic.co/beats/filebeat:7.16.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> container_name: filebeat
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> user: root
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> environment:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - strict.perms=false
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> volumes:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - ./filebeat.yml:/usr/share/filebeat/filebeat.yml
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - ./data:/usr/share/filebat/data
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> - elastic
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> command: bash -c &amp;#34;cd /usr/share/filebeat &amp;amp;&amp;amp; filebeat -e -c ./filebeat.yml&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">networks:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> elastic:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> driver: bridge
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> external: true
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># filebeat.yml&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">filebeat&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">inputs&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="n">type&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="nb">log&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">enabled&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="bp">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">paths&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="o">/&lt;/span>&lt;span class="n">usr&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">share&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">filebeat&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">input&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">log&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">filebeat&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">config&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">modules&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">path&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="o">$&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="n">path&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">config&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">modules&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">d&lt;/span>&lt;span class="o">/*.&lt;/span>&lt;span class="n">yml&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">reload&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">enabled&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="bp">false&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">filbeat&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">autodiscover&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">providers&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">-&lt;/span> &lt;span class="n">type&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">docker&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">hints&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">enabled&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="bp">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">output&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">logstash&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">hosts&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;logstash:5004&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>容器启动后，会监听&lt;code>/usr/share/filebeat/input.log&lt;/code>文件。当该文件发生变更时，&lt;code>filebeat&lt;/code>会读取增量的内容并进行转发。&lt;/p>
+&lt;h1 id="let-it-run">
+&lt;a href="#let-it-run">#&lt;/a>
+let it run
+&lt;/h1>&lt;p>经过上述步骤，一个简单的日志监听、采集、处理、存档的流程就构建了。为了测试，可以在&lt;code>filebeat&lt;/code>容器的&lt;code>/usr/share/filebeat/input.log&lt;/code>中写入：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">{&amp;#34;errno&amp;#34;: 0,&amp;#34;data&amp;#34;: [{&amp;#34;age&amp;#34;: 9,&amp;#34;name&amp;#34;: &amp;#34;tt&amp;#34;},{&amp;#34;age&amp;#34;: 8,&amp;#34;name&amp;#34;: &amp;#34;gg&amp;#34;}]}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>按照&lt;code>logstash:online.conf&lt;/code>的逻辑，会向&lt;code>elasticsearch&lt;/code>的&lt;code>logstash&lt;/code>写入信息。&lt;/p>
+&lt;h1 id="参考文献">
+&lt;a href="#%e5%8f%82%e8%80%83%e6%96%87%e7%8c%ae">#&lt;/a>
+参考文献
+&lt;/h1>&lt;ol>
+&lt;li>&lt;a class="link" href="https://www.cnblogs.com/zhangfushuai/p/14975307.html" target="_blank" rel="noopener"
+>Linux-ELK日志收集&lt;/a>&lt;/li>
+&lt;li>&lt;a class="link" href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#docker" target="_blank" rel="noopener"
+>Install Elasticsearch with Docker&lt;/a>&lt;/li>
+&lt;li>&lt;a class="link" href="https://www.cnblogs.com/cjsblog/p/9459781.html" target="_blank" rel="noopener"
+>Logstash介绍&lt;/a>&lt;/li>
+&lt;/ol></description></item></channel></rss>

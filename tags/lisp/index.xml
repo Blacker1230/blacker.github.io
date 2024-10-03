@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Lisp on 李岩</title><link>https://liyan-ah.github.io/tags/lisp/</link><description>Recent content in Lisp on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Mon, 03 Jun 2019 22:42:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/lisp/index.xml" rel="self" type="application/rss+xml"/><item><title>lisp-do循环</title><link>https://liyan-ah.github.io/p/lisp-do%E5%BE%AA%E7%8E%AF/</link><pubDate>Mon, 03 Jun 2019 22:42:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/lisp-do%E5%BE%AA%E7%8E%AF/</guid><description>&lt;p>lisp中，do循环形象如下:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="k">do&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">variable&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">definition&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">end&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">test&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">form&lt;/span> &lt;span class="n">result&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">form&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">statement&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>其中，&lt;code>(variable-definition*)&lt;/code>是一些行日&lt;code>(var init next)&lt;/code>的赋值结构。在&lt;code>do&lt;/code>开始时，&lt;code>var&lt;/code>会被赋值为&lt;code>init&lt;/code>。并且在一次循环结束后，&lt;code>var&lt;/code>会被赋值为&lt;code>next&lt;/code>所表示的内容。&lt;br>
+形如：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">(do ((n 0 (+ 1 n))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (cur 0 next)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (next 1 (+ cur next)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ((= 10 n) (format t &amp;#34;|end ~d&amp;#34; cur))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (format t &amp;#34;~d|&amp;#34; cur));
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>输出：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">0|1|1|2|3|5|8|13|21|34||end 55
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>类似于python中的：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">cur = 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">next = 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">for i in range(10):
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> print(&amp;#34;%d|&amp;#34; % cur)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> cur, next = next, cur + next
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">print(&amp;#34;|end %d&amp;#34; % cur)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div></description></item><item><title>lisp-let变量声明</title><link>https://liyan-ah.github.io/p/lisp-let%E5%8F%98%E9%87%8F%E5%A3%B0%E6%98%8E/</link><pubDate>Thu, 30 May 2019 22:51:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/lisp-let%E5%8F%98%E9%87%8F%E5%A3%B0%E6%98%8E/</guid><description>&lt;p>lisp声明、使用变量的一种方法，是使用&lt;code>let&lt;/code>语句。&lt;br>
+形如：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="p">;(&lt;/span>&lt;span class="n">let&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="n">variable&lt;/span> &lt;span class="n">declare1&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">variable&lt;/span> &lt;span class="n">declare2&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="o">...&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">;&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">varaible&lt;/span> &lt;span class="n">used&lt;/span> &lt;span class="n">here&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">foo&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">x&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="s2">&amp;#34;Parameter: ~a~%&amp;#34;&lt;/span> &lt;span class="n">x&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">let&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="n">x&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="s2">&amp;#34;Outer LET: ~a~%&amp;#34;&lt;/span> &lt;span class="n">x&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">let&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="n">x&lt;/span> &lt;span class="mi">3&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="s2">&amp;#34;Inner LET: ~a~%&amp;#34;&lt;/span> &lt;span class="n">x&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="s2">&amp;#34;Outer LET: ~a~%&amp;#34;&lt;/span> &lt;span class="n">x&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="s2">&amp;#34;Parameter: ~a~%&amp;#34;&lt;/span> &lt;span class="n">x&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">foo&lt;/span> &lt;span class="mi">10&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>声明的作用域，和C语言很相似，存在覆盖的特点。输出：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">Parameter: 10
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Outer LET: 2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Inner LET: 3
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Outer LET: 2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Parameter: 10
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>使用&lt;code>let&lt;/code>声明时，变量声明域内，无法使用前一个在本声明域内声明的变量：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">defun&lt;/span> &lt;span class="n">year&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">day&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">y&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">let&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="n">m&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">y&lt;/span> &lt;span class="mi">12&lt;/span>&lt;span class="p">))&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">d&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">m&lt;/span> &lt;span class="mi">30&lt;/span>&lt;span class="p">)))&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">(&lt;/span>&lt;span class="n">format&lt;/span> &lt;span class="n">t&lt;/span> &lt;span class="s2">&amp;#34;Year:~d~%Month:~d~%Day:~d~%&amp;#34;&lt;/span> &lt;span class="n">y&lt;/span> &lt;span class="n">m&lt;/span> &lt;span class="n">d&lt;/span>&lt;span class="p">)));&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">(&lt;/span>&lt;span class="n">year&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">day&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">***&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="n">LET&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">variable&lt;/span> &lt;span class="n">M&lt;/span> &lt;span class="n">has&lt;/span> &lt;span class="n">no&lt;/span> &lt;span class="n">value&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>使用&lt;code>let*&lt;/code>可以进行如此操作：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">(defun year-day(y)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (let* ((m (* y 12)) (d (* m 30)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (format t &amp;#34;Year:~d~%Month:~d~%Day:~d~%&amp;#34; y m d)));
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(year-day 1);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Year:1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Month:12
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Day:360
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>just like this.&lt;/p></description></item><item><title>lisp-lambda函数</title><link>https://liyan-ah.github.io/p/lisp-lambda%E5%87%BD%E6%95%B0/</link><pubDate>Wed, 29 May 2019 23:28:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/lisp-lambda%E5%87%BD%E6%95%B0/</guid><description>&lt;p>lisp中的lambda表达式，显然和python中的很相似。&lt;br>
+参照《实用common lisp编程》：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;按照 min max, 步长step为参数的fn计算的长度输出 *
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(defun plot (fn min max step)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (loop for i from min to max by step do
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (loop repeat (funcall fn i) do (format t &amp;#34;*&amp;#34;))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (format t &amp;#34;~%&amp;#34;)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(plot #&amp;#39;exp 0 4 1/2);
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(plot #&amp;#39;(lambda (x) (* 2 x)) 0 10 1);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>输出：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">*
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">**
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">***
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*****
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">********
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*********************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">**********************************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*******************************************************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">**
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">****
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">******
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">********
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">**********
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">**************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">****************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">******************
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">********************
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>#&amp;rsquo;&lt;/code>为lisp语言的语法糖，展开表示为&lt;code>function&lt;/code>。后者将会把一个函数生成为一个函数对象，后者可以通过&lt;code>funcall&lt;/code>调用。&lt;br>
+interesting。&lt;/p></description></item><item><title>clisp编译</title><link>https://liyan-ah.github.io/p/clisp%E7%BC%96%E8%AF%91/</link><pubDate>Tue, 28 May 2019 22:16:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/clisp%E7%BC%96%E8%AF%91/</guid><description>&lt;p>目前，lisp的开发环境基本上被&lt;a class="link" href="https://common-lisp.net/project/lispbox/" target="_blank" rel="noopener"
+>lispbox&lt;/a>所垄断。所以本文来说一&lt;a class="link" href="https://clisp.sourceforge.io/" target="_blank" rel="noopener"
+>CLISP&lt;/a>，C语言实现的LISP解释器的安装。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">wget &amp;#34;https://ftp.gnu.org/pub/gnu/clisp/latest/clisp-2.49.tar.gz&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tar -xvf clisp-2.49.tar.gz
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cd clisp-2.49
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./configure --prefix=LOCAL_PATH --ignore-absence-of-libsigsegv
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cd src &amp;amp;&amp;amp; make &amp;amp;&amp;amp; make install
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这样就可以将CLISP安装到&lt;code>&amp;ndash;prefix&lt;/code>指定的路径。&lt;br>
+然后是使用。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">cd LOCAL_PATH/bin/
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./clisp
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>就会出现欢迎界面：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"> i i i i i i i ooooo o ooooooo ooooo ooooo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> I I I I I I I 8 8 8 8 8 o 8 8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> I \ `+&amp;#39; / I 8 8 8 8 8 8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> \ `-+-&amp;#39; / 8 8 8 ooooo 8oooo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> `-__|__-&amp;#39; 8 8 8 8 8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> | 8 o 8 8 o 8 8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ------+------ ooooo 8oooooo ooo8ooo ooooo 8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Welcome to GNU CLISP 2.49 (2010-07-07) &amp;lt;http://clisp.cons.org/&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) Bruno Haible, Michael Stoll 1992, 1993
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) Bruno Haible, Marcus Daniels 1994-1997
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) Bruno Haible, Pierpaolo Bernardi, Sam Steingold 1998
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) Bruno Haible, Sam Steingold 1999-2000
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) Sam Steingold, Bruno Haible 2001-2010
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Type :h and hit Enter for context help.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[1]&amp;gt;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>尝试进行函数求值：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">[1]&amp;gt; (defun sum(x y) (format t &amp;#34;~d&amp;#34; (+ x y)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SUM
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[2]&amp;gt; (sum 1 2)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">3
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NIL
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[3]&amp;gt; (exit)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Bye.
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>或者，将以下内容写入&lt;code>test.lisp&lt;/code>文件然后执行：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">(defun sum(x y)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (format t &amp;#34;~d&amp;#34; (+ x y)))
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">(sum 1 2)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>执行&lt;code>LOCAL_PATH/bin/clisp test.lisp&lt;/code>成功输出。&lt;/p></description></item><item><title>lisp-hello world</title><link>https://liyan-ah.github.io/p/lisp-hello-world/</link><pubDate>Tue, 28 May 2019 21:52:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/lisp-hello-world/</guid><description>&lt;p>lisp语言的基本表达式为S-表达式。这与受&lt;a class="link" href="https://en.wikipedia.org/wiki/ALGOL" target="_blank" rel="noopener"
+>Algol&lt;/a>语言影响的C系语言有很大的不同。显然，这很有趣：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">;the bellow is hello world function in lisp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (defun hello-world()
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;hello world function in lisp&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> (format t &amp;#34;hello, world!&amp;#34;));```
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">由&amp;lt;code&amp;gt;()&amp;lt;/code&amp;gt;所包围的内容，为*列表*，其余内容为原子。显然，lisp表达式有很多列表表示（List Processing)。
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div></description></item></channel></rss>

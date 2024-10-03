@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Docker on 李岩</title><link>https://liyan-ah.github.io/tags/docker/</link><description>Recent content in Docker on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Fri, 04 Mar 2022 15:00:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/docker/index.xml" rel="self" type="application/rss+xml"/><item><title>centos 安装docker并构建golang镜像</title><link>https://liyan-ah.github.io/p/centos-%E5%AE%89%E8%A3%85docker%E5%B9%B6%E6%9E%84%E5%BB%BAgolang%E9%95%9C%E5%83%8F/</link><pubDate>Fri, 04 Mar 2022 15:00:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/centos-%E5%AE%89%E8%A3%85docker%E5%B9%B6%E6%9E%84%E5%BB%BAgolang%E9%95%9C%E5%83%8F/</guid><description>&lt;blockquote>
+&lt;p>工作需要（抛弃了kubectl搞一套环境的方法），需要在centos8上构建一套docker镜像并运行golang程序。这里记录下docker安装及golang程序打包镜像的过程。&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="安装docker">
+&lt;a href="#%e5%ae%89%e8%a3%85docker">#&lt;/a>
+安装docker
+&lt;/h1>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="n">sudo&lt;/span> &lt;span class="n">yum&lt;/span> &lt;span class="n">install&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="n">y&lt;/span> &lt;span class="n">yum&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">utils&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">sudo&lt;/span> &lt;span class="n">yum&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">config&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">manager&lt;/span> \
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">--&lt;/span>&lt;span class="n">add&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">repo&lt;/span> \
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">https&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="o">//&lt;/span>&lt;span class="n">download&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">docker&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">com&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">linux&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">centos&lt;/span>&lt;span class="o">/&lt;/span>&lt;span class="n">docker&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ce&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">repo&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">sudo&lt;/span> &lt;span class="n">yum&lt;/span> &lt;span class="n">install&lt;/span> &lt;span class="n">docker&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ce&lt;/span> &lt;span class="n">docker&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ce&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">cli&lt;/span> &lt;span class="n">containerd&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">io&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># 这里报了一个错&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># (try to add &amp;#39;--allowerasing&amp;#39; to command line to replace conflicting packages or &amp;#39;--skip-broken&amp;#39; to skip uninstallable packages or &amp;#39;--nobest&amp;#39; to use not only best candidate packages) &lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># 重新执行 &lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">sudo&lt;/span> &lt;span class="n">yum&lt;/span> &lt;span class="n">install&lt;/span> &lt;span class="n">docker&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ce&lt;/span> &lt;span class="n">docker&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">ce&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">cli&lt;/span> &lt;span class="n">containerd&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">io&lt;/span> &lt;span class="o">--&lt;/span>&lt;span class="n">allowerasing&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># 启动 docker &lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">sudo&lt;/span> &lt;span class="n">systemctl&lt;/span> &lt;span class="n">start&lt;/span> &lt;span class="n">docker&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># 测试 &lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">sudo&lt;/span> &lt;span class="n">docker&lt;/span> &lt;span class="n">run&lt;/span> &lt;span class="n">hello&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">world&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># Hello from Docker! &lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">\&lt;span class="c1"># This message shows that your installation appears to be working correctly. &lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="构建golang服务镜像">
+&lt;a href="#%e6%9e%84%e5%bb%bagolang%e6%9c%8d%e5%8a%a1%e9%95%9c%e5%83%8f">#&lt;/a>
+构建golang服务镜像
+&lt;/h1>&lt;p>先看下工作目录的结构：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── Dockerfile
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── gin-srv
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── go.mod
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">├── go.sum
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">└── main.go
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>简单写一个&lt;code>golang&lt;/code>的程序:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-gdscript3" data-lang="gdscript3">&lt;span class="line">&lt;span class="cl">&lt;span class="n">package&lt;/span> &lt;span class="n">main&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="s2">&amp;#34;time&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">import&lt;/span> &lt;span class="s2">&amp;#34;github.com/gin-gonic/gin&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">type&lt;/span> &lt;span class="n">Resp&lt;/span> &lt;span class="n">struct&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Errno&lt;/span> &lt;span class="ne">int&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;errno&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">Data&lt;/span> &lt;span class="n">map&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">string&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="n">int64&lt;/span> &lt;span class="err">`&lt;/span>&lt;span class="n">json&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;data&amp;#34;&lt;/span>&lt;span class="err">`&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">func&lt;/span> &lt;span class="n">main&lt;/span>&lt;span class="p">(){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Default&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">GET&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;/ping&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="k">func&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">gin&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Context&lt;/span>&lt;span class="p">){&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">resp&lt;/span> &lt;span class="p">:&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">Resp&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="n">Errno&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">Data&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">map&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">string&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="n">int64&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;now&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="n">time&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Now&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Unix&lt;/span>&lt;span class="p">(),&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">c&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">JSON&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">200&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">resp&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">})&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">r&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">Run&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;0.0.0.0:8080&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>构建一个Dockerfile，以&lt;code>centos&lt;/code>作为base以便能够正常登陆容器进行调试：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">FROM centos:8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ADD . ./
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">EXPOSE 8080
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ENTRYPOINT [&amp;#34;./gin-srv&amp;#34;]
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>启动容器：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># 构建镜像
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sudo docker build -t gin_docker .
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># 启动镜像
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sudo docker run --name gin_docker -p 8080:8080 -d gin_docker
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>访问容器中的服务：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">$ curl localhost:8080/ping
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">{&amp;#34;errno&amp;#34;:0,&amp;#34;data&amp;#34;:{&amp;#34;now&amp;#34;:1646381863}}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>容器起来了。可以继续后面的性能评估及agent启动工作了。&lt;/p>
+&lt;h1 id="参考文献">
+&lt;a href="#%e5%8f%82%e8%80%83%e6%96%87%e7%8c%ae">#&lt;/a>
+参考文献
+&lt;/h1>&lt;p>&lt;a class="link" href="https://docs.docker.com/engine/install/centos/" target="_blank" rel="noopener"
+>Install Docker Engine on CentOS&lt;/a>
+&lt;a class="link" href="https://article.itxueyuan.com/7DreWj" target="_blank" rel="noopener"
+>Golang应用打包docker镜像并运行&lt;/a>&lt;/p></description></item></channel></rss>

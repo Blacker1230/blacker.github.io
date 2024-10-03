@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>K8s on 李岩</title><link>https://liyan-ah.github.io/tags/k8s/</link><description>Recent content in K8s on 李岩</description><generator>Hugo -- gohugo.io</generator><language>zh-Hans</language><lastBuildDate>Thu, 24 Feb 2022 17:27:00 +0000</lastBuildDate><atom:link href="https://liyan-ah.github.io/tags/k8s/index.xml" rel="self" type="application/rss+xml"/><item><title>centos 构建 local-k8s</title><link>https://liyan-ah.github.io/p/centos-%E6%9E%84%E5%BB%BA-local-k8s/</link><pubDate>Thu, 24 Feb 2022 17:27:00 +0000</pubDate><guid>https://liyan-ah.github.io/p/centos-%E6%9E%84%E5%BB%BA-local-k8s/</guid><description>&lt;blockquote>
+&lt;p>工作原因，需要安装一个 local-k8s。中间碰了很多坑，做个记录。
+环境：Linux test 4.18.0-193.el8.x86_64&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="kubectl">
+&lt;a href="#kubectl">#&lt;/a>
+kubectl
+&lt;/h1>&lt;p>&lt;a class="link" href="https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/" target="_blank" rel="noopener"
+>kubectl安装说明&lt;/a>，可以直接使用包管理器安装，如：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">cat &amp;lt;&amp;lt;EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[kubernetes]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">name=Kubernetes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">enabled=1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">gpgcheck=1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">repo_gpgcheck=1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">EOF
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sudo yum install -y kubectl
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="minicube">
+&lt;a href="#minicube">#&lt;/a>
+minicube
+&lt;/h1>&lt;p>&lt;a class="link" href="https://minikube.sigs.k8s.io/docs/start/" target="_blank" rel="noopener"
+>minicube安装说明&lt;/a> 也比较方便，官网里有不同系统的安装方式。笔者使用&lt;code>curl&lt;/code>的安装：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sudo install minikube-linux-amd64 /usr/local/bin/minikube
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h1 id="start-cluster">
+&lt;a href="#start-cluster">#&lt;/a>
+start cluster
+&lt;/h1>&lt;h2 id="安装-kvm">
+&lt;a href="#%e5%ae%89%e8%a3%85-kvm">#&lt;/a>
+安装 kvm
+&lt;/h2>&lt;p>&lt;a class="link" href="https://phoenixnap.com/kb/install-kvm-centos" target="_blank" rel="noopener"
+>How to Install KVM on CentOS 8&lt;/a>&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># check
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cat /proc/cpuinfo | egrep &amp;#34;vmx|svm&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># install
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sudo yum install @virt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># start
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>minikube start --driver=&amp;lt;kvm2|hyperkit&amp;gt; --cni=flannel --cpus=4 --memory=8000 -p=&amp;lt;cluster-name&amp;gt;&lt;/code>，其中，笔者使用的&lt;code>centos&lt;/code>系统使用&lt;code>--driver=kvm2&lt;/code>选项。执行时存在诸多问题：&lt;/p>
+&lt;h2 id="kvm2-错误">
+&lt;a href="#kvm2-%e9%94%99%e8%af%af">#&lt;/a>
+kvm2 错误
+&lt;/h2>&lt;p>参照错误提示来。需要安装&lt;code>libvirt&lt;/code>，笔者直接&lt;code>sudo yum install libvirt&lt;/code>进行的。&lt;/p>
+&lt;h2 id="not-in-libvirt-group">
+&lt;a href="#not-in-libvirt-group">#&lt;/a>
+not in libvirt group
+&lt;/h2>&lt;p>不确定为什么需要单独搞一个&lt;code>libvirt group&lt;/code>，按照&lt;a class="link" href="https://github.com/kubernetes/minikube/issues/5617" target="_blank" rel="noopener"
+>issue-5617&lt;/a> 的说明，需要将用户添加到&lt;code>libvirt&lt;/code>用户组中。笔者直接进行&lt;code>sudo usermod -a -G libvirt ${USERNAME}&lt;/code>。&lt;/p>
+&lt;h2 id="virsh-报错">
+&lt;a href="#virsh-%e6%8a%a5%e9%94%99">#&lt;/a>
+virsh 报错
+&lt;/h2>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">error: failed to connect to the hypervisor
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">error: authentication failed: access denied by policy
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>需要在将当前用户添加到&lt;code>libvirt&lt;/code>之后，需要配置&lt;code>polkit&lt;/code>规则，确保&lt;code>libvirt&lt;/code>组中的用户能够访问&lt;code>libvirt&lt;/code>。&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl"># 方案参考 https://blog.csdn.net/cunjiu9486/article/details/109074019
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># /etc/polkit-1/rules.d/80-libvirt.rules
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">polkit.addRule(function(action, subject){
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> if (action.id == &amp;#34;org.libvirt.unix.manage&amp;#34; &amp;amp;&amp;amp; subject.local &amp;amp;&amp;amp; subject.active &amp;amp;&amp;amp; subject.isInGroup(&amp;#34;libvirt&amp;#34;)){
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return polkit.Result.YES;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">});
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>添加规则后，还需要重启 &lt;code>polkitd&lt;/code>。简单粗暴：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">nohup /usr/lib/polkit-1/polkitd -r &amp;gt; /dev/null &amp;amp;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="cannot-find-suitable-emulator-for-x86_64">
+&lt;a href="#cannot-find-suitable-emulator-for-x86_64">#&lt;/a>
+Cannot find suitable emulator for x86_64
+&lt;/h2>&lt;p>通过 &lt;code>sudo systemctl status libvirtd&lt;/code> 查看，发现报错是：&lt;code>cannot initialize crypt&lt;/code>，继续安装&lt;code>yum install libgcrypt&lt;/code>。&lt;/p>
+&lt;h2 id="dnsmasq-unknown-user-or-group-dnsmasq">
+&lt;a href="#dnsmasq-unknown-user-or-group-dnsmasq">#&lt;/a>
+dnsmasq: unknown user or group: dnsmasq
+&lt;/h2>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">groupadd dnsmasq
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">useradd dnsmasq -g dnsmasq
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="failed-to-start-host">
+&lt;a href="#failed-to-start-host">#&lt;/a>
+Failed to start host
+&lt;/h2>&lt;p>提示建议删除刚才的&lt;code>cluster&lt;/code>，不清楚为啥，提示了就搞起来：&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">minikube delete $cluster_name
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># 再次执行
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">minikube start --driver=&amp;lt;kvm2|hyperkit&amp;gt; --cni=flannel --cpus=4 --memory=8000 -p=&amp;lt;cluster-name&amp;gt;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>这次可以了！&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="line">&lt;span class="cl">* Enabled addons: storage-provisioner, default-storageclass
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">* Done! kubectl is now configured to use &amp;#34;${cluster_name}&amp;#34; cluster and &amp;#34;default&amp;#34; namespace by default
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div></description></item></channel></rss>

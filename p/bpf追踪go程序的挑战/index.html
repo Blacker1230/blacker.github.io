@@ -1,0 +1,1318 @@
+<!doctype html><html lang=zh-Hans dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content=" 原文地址Challenges of BPF Tracing Go。翻译不尽如人意，继续努力。\n# BPF追踪Go程序的挑战 当大家对Go 1.17语言调用规约(function calling convention)调整带来的性能优化感到兴奋时，我却遗憾的看到Go 1.17并没有让BPF uretprobe变得可行。事实证明，我还没有完全意识到Go的可调整的栈空间会让事情变得多复杂。\n"><title>BPF追踪Go程序的挑战</title>
+<link rel=canonical href=https://liyan-ah.github.io/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/><link rel=stylesheet href=/scss/style.min.8e60baf4cd3fc55968717a6e39762f4d28ed7ef6007566b6c7970ad0fe907198.css><meta property='og:title' content="BPF追踪Go程序的挑战"><meta property='og:description' content=" 原文地址Challenges of BPF Tracing Go。翻译不尽如人意，继续努力。\n# BPF追踪Go程序的挑战 当大家对Go 1.17语言调用规约(function calling convention)调整带来的性能优化感到兴奋时，我却遗憾的看到Go 1.17并没有让BPF uretprobe变得可行。事实证明，我还没有完全意识到Go的可调整的栈空间会让事情变得多复杂。\n"><meta property='og:url' content='https://liyan-ah.github.io/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/'><meta property='og:site_name' content='李岩'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='bpf'><meta property='article:tag' content='golang'><meta property='article:published_time' content='2023-06-25T17:08:00+00:00'><meta property='article:modified_time' content='2023-06-25T17:08:00+00:00'><meta name=twitter:title content="BPF追踪Go程序的挑战"><meta name=twitter:description content=" 原文地址Challenges of BPF Tracing Go。翻译不尽如人意，继续努力。\n# BPF追踪Go程序的挑战 当大家对Go 1.17语言调用规约(function calling convention)调整带来的性能优化感到兴奋时，我却遗憾的看到Go 1.17并没有让BPF uretprobe变得可行。事实证明，我还没有完全意识到Go的可调整的栈空间会让事情变得多复杂。\n"><link rel="shortcut icon" href=/icon.jpg></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky"><button class="hamburger hamburger--spin" type=button id=toggle-menu aria-label=切换菜单>
+<span class=hamburger-box><span class=hamburger-inner></span></span></button><header><figure class=site-avatar><a href=/><img src=/img/avatar_hu16177073813840188542.png width=300 height=300 class=site-logo loading=lazy alt=Avatar></a></figure><div class=site-meta><h1 class=site-name><a href=/>李岩</a></h1><h2 class=site-description>努力做个工程师。</h2></div></header><ol class=menu-social><li><a href=https://github.com/liyan-ah/liyan-ah.github.io/issues/new target=_blank title=GitHub rel=me><svg class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6.0 00-1.3-3.2 4.2 4.2.0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3.0 00-6.2.0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2.0 00-.1 3.2A4.6 4.6.0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a></li></ol><ol class=menu id=main-menu><li><a href=/><svg class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
+<span>Home</span></a></li><li><a href=/archives/><svg class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><rect x="3" y="4" width="18" height="4" rx="2"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+<span>Archives</span></a></li><li><a href=/search/><svg class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
+<span>Search</span></a></li><li class=menu-bottom-section><ol class=menu><li id=dark-mode-toggle><svg class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="8" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<svg class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="16" cy="12" r="2"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>
+<span>暗色模式</span></li></ol></li></ol></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/bpf/ style=background-color:#2a9d8f;color:#fff>BPF</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/bpf%E8%BF%BD%E8%B8%AAgo%E7%A8%8B%E5%BA%8F%E7%9A%84%E6%8C%91%E6%88%98/>BPF追踪Go程序的挑战</a></h2></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jun 25, 2023</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 12 分钟</time></div></footer></div></header><section class=article-content><blockquote><p>原文地址<a class=link href=https://blog.0x74696d.com/posts/challenges-of-bpf-tracing-go/ target=_blank rel=noopener>Challenges of BPF Tracing Go</a>。翻译不尽如人意，继续努力。</p></blockquote><h1 id=bpf追踪go程序的挑战><a href=#bpf%e8%bf%bd%e8%b8%aago%e7%a8%8b%e5%ba%8f%e7%9a%84%e6%8c%91%e6%88%98>#</a>
+BPF追踪Go程序的挑战</h1><p>当大家对<code>Go 1.17</code>语言调用规约(<code>function calling convention</code>)调整带来的性能优化感到兴奋时，我却遗憾的看到<code>Go 1.17</code>并没有让<code>BPF uretprobe</code>变得可行。事实证明，我还没有完全意识到<code>Go</code>的可调整的栈空间会让事情变得多复杂。</p><p><code>Go</code>极短的编译时间使得“输出调试”变得非常便捷。当你知道问题处在一个特定的变量时，往往会随手塞入一个<code>fmt.Printf</code>或者<code>log.Debug</code>或者<code>spew.Dump</code>来观察感兴趣的点。但是我经常工作在一个有状态的系统中，在这样的环境下“输出调试”变
+得非常受限。重新编入一个<code>log</code>语句并且重启系统，往往意味着丢失掉可能导致异常的状态，并且日志输出可能会带来性能开销并掩盖掉<code>bug</code>。在这种背景下，我选择<code>BPF</code>工具，比如<code>bpftrace</code>，来定位问题。</p><p>对应用程序开发者而言，<code>BPF</code>的一大强力功能是用户态的动态程序观测，在<code>uprobe</code>及<code>uretprobe</code>的基础上构建起来。<code>uprobe</code>会嵌入一个<code>BPF</code>探针在函数被调用的地方，<code>uretprobe</code>则会嵌入一个探针在函数返回的地方。</p><p>比如，这里是一个使用<code>C</code>语言写的程序：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>int sum(int a, int b){
+</span></span><span class=line><span class=cl>    return a+b;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>使用如下的<code>bpftrace</code>程序可以输出上述程序的参数及返回值。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#!/usr/bin/env bpftrace
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./sum:&#34;sum&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;args: %d + %d\n&#34;, arg0, arg1);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uretprobe:./sum:&#34;sum&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;result: %d\n&#34;, reg(&#34;ax&#34;));
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>当我们运行这个<code>bptrace</code>脚本是，它会等待我们在另一个终端运行目标<code>C</code>程序，然后输出如下内容：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>$ sudo ./sum.bt
+</span></span><span class=line><span class=cl>Attaching 2 probes...
+</span></span><span class=line><span class=cl>args: 2 + 3
+</span></span><span class=line><span class=cl>result: 5
+</span></span><span class=line><span class=cl>^C
+</span></span></code></pre></td></tr></table></div></div><p>对于一个有状态的服务来说是这是一种不可思议的强力功能，因为你可以将这些探针附加在一个运行中的程序而不需重新编译它，并且几乎不会带来性能损失。这种思想诞生在<a class=link href=http://dtrace.org/blogs/about/ target=_blank rel=noopener>DTrace</a>，而后由<code>BPF</code>将这种观测能力
+移植到<code>Linux</code>中。</p><p>但是<code>Go</code>在<code>1.17</code>之前的调用规约(<code>calling convention</code>)使得<code>Go</code>的追踪变得复杂。在<a class=link href=https://en.wikipedia.org/wiki/X86_calling_conventions#System_V_AMD64_ABI target=_blank rel=noopener>System V AMD64调用规约</a>中，函数入参及返回值均通
+寄存器传递。<code>BPF</code>的工具也假定编译器会遵循这一规约，但是<code>Go</code>没有。不同的是，<code>Go</code>遵循<code>Plan9</code>的调用规约，即通过栈来传递参数。返回值也会通过出栈来返回。</p><p>对于<code>uprobe</code>而言这意味着我们不能遵循AMD64调用规约，使用<code>arg</code>参数来将寄存器里的参数读出。与此相对应的是，我们需要从栈里将参数读出来。从栈里读参会比较繁琐，因为你需要获取栈帧(<code>stack pointer</code>)，从中读取参数地址，然后读取地址里
+的参数。在<code>bpftrace-0.9.3</code>里，这些操作被封装成了<a class=link href=https://github.com/iovisor/bpftrace/issues/740 target=_blank rel=noopener>sargx</a>，所以还不算特别糟。</p><p>但是对于<code>uretprobe</code>就不一样了。不同于每个<code>goroutine</code>使用一个线程，<code>Go</code>的是多个<code>goroutine</code>对应多个线程的（&ldquo;M:N调度&rdquo;）。所以不同于每个线程拥有2MB的栈空间，每个goroutine只有被goroutine自己维护而非操作系统维护的，短短的
+2KB的栈空间。当程序需要为一个<code>goroutine</code>增加栈空间并且当前空间内没有足够多的空余时，运行时会将整个<code>goroutine</code>的栈拷贝到另外一个有足够多空间用来扩展的内存空间中。</p><p>当你配置<a class=link href=https://github.com/torvalds/linux/blob/v5.8/kernel/events/uprobes.c#L1861-L1925 target=_blank rel=noopener>uretprobe</a>时，内核也会创建一个拥有返回探针处理的<code>uprobe</code>。当这个<code>uprobe</code>触发时，它会劫持返回地址并且使用一个中断
+的“跳转地址”(tramponline)来替代它。</p><p>如果这个地址在<code>uprobe</code>触发时被移动了，返回地址将不再有效，所以一个<code>uretprobe</code>将会读取其他地方的内存。这将会使得程序崩溃。</p><p>为了解决这个问题，你需要从程序的入口处使用<code>uprobe</code>来追踪程序调用，然后记录函数每个<code>return</code>点的偏移信息。这显得格外的粗暴并且涉及二进制信息的反汇编。</p><p>你大概不会花费一整天来学习汇编，我当然也不会。所以让我们快速的来看下如何读取<code>go</code>反汇编后的内容。假设这是我们的程序：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=line><span class=cl><span class=kn>package</span> <span class=nx>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kn>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s>&#34;os&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>swap</span><span class=p>(</span><span class=nx>x</span><span class=p>,</span> <span class=nx>y</span> <span class=kt>string</span><span class=p>)</span> <span class=p>(</span><span class=kt>string</span><span class=p>,</span> <span class=kt>string</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span> <span class=nx>y</span><span class=p>,</span> <span class=nx>x</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kd>func</span> <span class=nf>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=nx>args</span> <span class=o>:=</span> <span class=nx>os</span><span class=p>.</span><span class=nx>Args</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=nx>args</span><span class=p>)</span> <span class=p>&lt;</span> <span class=mi>3</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=nb>panic</span><span class=p>(</span><span class=s>&#34;needs 2 args&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=nx>a</span><span class=p>,</span> <span class=nx>b</span> <span class=o>:=</span> <span class=nf>swap</span><span class=p>(</span><span class=nx>args</span><span class=p>[</span><span class=mi>1</span><span class=p>],</span> <span class=nx>args</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span>
+</span></span><span class=line><span class=cl>	<span class=nx>fmt</span><span class=p>.</span><span class=nf>Println</span><span class=p>(</span><span class=nx>a</span><span class=p>,</span> <span class=nx>b</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>由于这段程序比较简短，<code>Go</code>可能会把<code>swap</code>函数进行内联。为了能够说明问题，我们将会使用<code>go build -gcflags '-l' -o swapper .</code>进行编译以防止内联。</p><p>首先我们使用<code>GDB</code>来反汇编程序。你当然也可以使用<code>objdump</code>来进行，但是这里我们希望能够多获取些内容。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>$ gdb --args ./swapper hello go
+</span></span><span class=line><span class=cl>...
+</span></span><span class=line><span class=cl>Reading symbols from ./swapper...
+</span></span><span class=line><span class=cl>Loading Go Runtime support.
+</span></span><span class=line><span class=cl>(gdb) b main.swap
+</span></span><span class=line><span class=cl>Breakpoint 1 at 0x497800: file /home/tim/swapper/main.go, line 9
+</span></span><span class=line><span class=cl>.
+</span></span><span class=line><span class=cl>(gdb) run
+</span></span><span class=line><span class=cl>Starting program: /home/tim/swapper/swapper hello world
+</span></span><span class=line><span class=cl>[New LWP 3413956]
+</span></span><span class=line><span class=cl>[New LWP 3413957]
+</span></span><span class=line><span class=cl>[New LWP 3413958]
+</span></span><span class=line><span class=cl>[New LWP 3413959]
+</span></span><span class=line><span class=cl>[New LWP 3413960]
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Thread 1 &#34;swapper&#34; hit Breakpoint 1, main.swap (x=..., y=..., ~r2=..., ~r3=...)
+</span></span><span class=line><span class=cl>    at /home/tim/swapper/main.go:9
+</span></span><span class=line><span class=cl>9               return y, x
+</span></span><span class=line><span class=cl>(gdb) disas
+</span></span><span class=line><span class=cl>Dump of assembler code for function main.swap:
+</span></span><span class=line><span class=cl>=&gt; 0x0000000000497800 &lt;+0&gt;:     mov    rax,QWORD PTR [rsp+0x18]
+</span></span><span class=line><span class=cl>   0x0000000000497805 &lt;+5&gt;:     mov    QWORD PTR [rsp+0x28],rax
+</span></span><span class=line><span class=cl>   0x000000000049780a &lt;+10&gt;:    mov    rax,QWORD PTR [rsp+0x20]
+</span></span><span class=line><span class=cl>   0x000000000049780f &lt;+15&gt;:    mov    QWORD PTR [rsp+0x30],rax
+</span></span><span class=line><span class=cl>   0x0000000000497814 &lt;+20&gt;:    mov    rax,QWORD PTR [rsp+0x8]
+</span></span><span class=line><span class=cl>   0x0000000000497819 &lt;+25&gt;:    mov    QWORD PTR [rsp+0x38],rax
+</span></span><span class=line><span class=cl>   0x000000000049781e &lt;+30&gt;:    mov    rax,QWORD PTR [rsp+0x10]
+</span></span><span class=line><span class=cl>   0x0000000000497823 &lt;+35&gt;:    mov    QWORD PTR [rsp+0x40],rax
+</span></span><span class=line><span class=cl>   0x0000000000497828 &lt;+40&gt;:    ret
+</span></span><span class=line><span class=cl>End of assembler dump.
+</span></span></code></pre></td></tr></table></div></div><p>总的来看，我们有4个指针需要移动：每个<code>string</code>都有一个长度以及一段字节码，并且我们有两个<code>string</code>。函数将指针重新排列在栈上，并且当函数返回时，这些值会从栈上弹出。</p><p>第一个指令是将栈帧上偏移量为<code>0x18</code>的值移动到暂存寄存器<code>rax</code>。让我们查看下这个地址，然后看看它是否是一个可读的<code>string</code>：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>(gdb) x/a $rsp+0x18
+</span></span><span class=line><span class=cl>0xc00011af18:   0x7fffffffddcd
+</span></span><span class=line><span class=cl>(gdb) x/s 0x7fffffffddcd
+</span></span><span class=line><span class=cl>0x7fffffffddcd: &#34;go&#34;
+</span></span></code></pre></td></tr></table></div></div><p>妙啊！所以第一个指令的意思是，我们将值喜庆<code>string</code>的64-bit的指针(<code>QWORD PTR</code>)赋给了暂存寄存器。下一个指令是将同一个指针从暂存区移动到栈顶(rsp+0x28)。</p><p>下一个指令是将<code>0x20</code>上的任意值移动到暂存区。这是个整数：我们字符串的长度！</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>(gdb) x/a $rsp+0x20
+</span></span><span class=line><span class=cl>0xc00011af20:   0x2
+</span></span></code></pre></td></tr></table></div></div><p>然后这个整数就被从暂存区移动到栈顶(rsp+0x30)。接下来的四个指令对另外两个参数做了相同的事情：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>(gdb) x/a $rsp+0x8
+</span></span><span class=line><span class=cl>0xc00011af08:   0x7fffffffddc7
+</span></span><span class=line><span class=cl>(gdb) x/s 0x7fffffffddc7
+</span></span><span class=line><span class=cl>0x7fffffffddc7: &#34;hello&#34;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>(gdb) x/a $rsp+0x10
+</span></span><span class=line><span class=cl>0xc00011af10:   0x5
+</span></span></code></pre></td></tr></table></div></div><p>我们单步执行(<code>si</code>)8次，直到来到<code>ret</code>指令处：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>...
+</span></span><span class=line><span class=cl>(gdb) si
+</span></span><span class=line><span class=cl>0x0000000000497828 in main.swap (x=..., y=..., ~r2=..., ~r3=...)
+</span></span><span class=line><span class=cl>    at /home/tim/swapper/main.go:9
+</span></span><span class=line><span class=cl>9               return y, x
+</span></span><span class=line><span class=cl>(gdb) disas
+</span></span><span class=line><span class=cl>Dump of assembler code for function main.swap:
+</span></span><span class=line><span class=cl>   0x0000000000497800 &lt;+0&gt;:     mov    rax,QWORD PTR [rsp+0x18]
+</span></span><span class=line><span class=cl>   0x0000000000497805 &lt;+5&gt;:     mov    QWORD PTR [rsp+0x28],rax
+</span></span><span class=line><span class=cl>   0x000000000049780a &lt;+10&gt;:    mov    rax,QWORD PTR [rsp+0x20]
+</span></span><span class=line><span class=cl>   0x000000000049780f &lt;+15&gt;:    mov    QWORD PTR [rsp+0x30],rax
+</span></span><span class=line><span class=cl>   0x0000000000497814 &lt;+20&gt;:    mov    rax,QWORD PTR [rsp+0x8]
+</span></span><span class=line><span class=cl>   0x0000000000497819 &lt;+25&gt;:    mov    QWORD PTR [rsp+0x38],rax
+</span></span><span class=line><span class=cl>   0x000000000049781e &lt;+30&gt;:    mov    rax,QWORD PTR [rsp+0x10]
+</span></span><span class=line><span class=cl>   0x0000000000497823 &lt;+35&gt;:    mov    QWORD PTR [rsp+0x40],rax
+</span></span><span class=line><span class=cl>=&gt; 0x0000000000497828 &lt;+40&gt;:    ret
+</span></span><span class=line><span class=cl>End of assembler dump.
+</span></span></code></pre></td></tr></table></div></div><p>函数已经完成了所有的功能，并且我们来到了这个函数将会返回给调用者的地方。现在我们可以确认下栈顶的内存地址：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>(gdb) x/a $rsp+0x40
+</span></span><span class=line><span class=cl>0xc00011af40:   0x5
+</span></span><span class=line><span class=cl>(gdb) x/a $rsp+0x38
+</span></span><span class=line><span class=cl>0xc00011af38:   0x7fffffffddc7
+</span></span><span class=line><span class=cl>(gdb) x/s  0x7fffffffddc7
+</span></span><span class=line><span class=cl>0x7fffffffddc7: &#34;hello&#34;
+</span></span></code></pre></td></tr></table></div></div><p>此时，我们可以看到我们已经将返回值移动到距离栈顶一定偏移量的指针上，而指针指向字符串。因为是在栈上，所以是“后进先出”的。这里可能会有些困惑因为函数的主要功能是交换这两个字符串。</p><p>如果你跟上了我的思路，自然的就能画出这样的分布：
+<img src=/stack.png loading=lazy alt=stack></p><p>如何将我们所学的内容应用到BPF呢？</p><p>首先，我们知道了尽管<code>Go</code>函数仅定义了两个参数，但实际上栈上有四个参数。所以我们需要定义两组栈上的参数。我们可以将它们正确的通过<code>bpftrace</code>里的<code>str</code>函数：<code>bpftrace:str(sarg0, sarg1)</code>来输出<code>x</code>，<code>str(sarg2, sarg3)</code>来
+输出<code>y</code>。</p><p>然后，尽管<code>uretprobe</code>无法工作，我们可以通过添加一个指向<code>return</code>指令偏移量的<code>uprobe</code>来模拟它。如果你再看下汇编指令，就能看到这个偏移地址是<code>+40</code>。所以<code>uprobe</code>最终看起来
+是：<code>uprobe:./bin/swapper:"main.swap"+40</code>。当我们触发这个探针时，我们仅查看返回值寄存器无法满足目标。我们需要检查上述发现的每个返回值的偏移地址。最终的<code>bpftrace</code>程序如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#!/usr/bin/env bpftrace
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./swapper:&#34;main.swap&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;swapping \&#34;%s\&#34; and \&#34;%s\&#34;\n&#34;,
+</span></span><span class=line><span class=cl>        str(sarg0, sarg1), str(sarg2, sarg3));
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./swapper:&#34;main.swap&#34;+40
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;results: \&#34;%s\&#34; and \&#34;%s\&#34;\n&#34;,
+</span></span><span class=line><span class=cl>        str(*(reg(&#34;sp&#34;)+0x28), *(reg(&#34;sp&#34;)+0x30)),
+</span></span><span class=line><span class=cl>        str(*(reg(&#34;sp&#34;)+0x38), *(reg(&#34;sp&#34;)+0x40))
+</span></span><span class=line><span class=cl>        )
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>我们在一个终端运行这段代码，在另一个终端运行<code>./swapper hello world</code>：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>$ sudo ./swapper.bt
+</span></span><span class=line><span class=cl>Attaching 2 probes...
+</span></span><span class=line><span class=cl>swapping &#34;hello&#34; and &#34;go&#34;
+</span></span><span class=line><span class=cl>results: &#34;go&#34; and &#34;hello&#34;
+</span></span><span class=line><span class=cl>^C
+</span></span></code></pre></td></tr></table></div></div><p>如你所见，仅一个<code>return probe</code>就需要做很多的准备。如果我们的程序有很多的返回点，我们不得不为每个返回点都做一次相同的事情。</p><p>对于一些复杂的函数，如<code>Nomad</code>的<code>FSM</code> <a class=link href=https://github.com/hashicorp/nomad/blob/v1.1.4/nomad/fsm.go#L193-L322 target=_blank rel=noopener>Apply</a>方法，我不得不采用如下方式生成<code>bpftrace</code>代码的方法：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=cp>#!/usr/bin/env bash
+</span></span></span><span class=line><span class=cl><span class=cp></span>
+</span></span><span class=line><span class=cl>cat <span class=s>&lt;&lt;EOF
+</span></span></span><span class=line><span class=cl><span class=s>#!/usr/bin/env bpftrace
+</span></span></span><span class=line><span class=cl><span class=s>/*
+</span></span></span><span class=line><span class=cl><span class=s>Get Nomad FSM.Apply latency
+</span></span></span><span class=line><span class=cl><span class=s>Note: using sarg with offsets isn&#39;t really concurrency safe and emits a warning
+</span></span></span><span class=line><span class=cl><span class=s>*/
+</span></span></span><span class=line><span class=cl><span class=s>
+</span></span></span><span class=line><span class=cl><span class=s>EOF</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>base</span><span class=o>=</span><span class=k>$(</span>objdump --disassemble<span class=o>=</span><span class=s2>&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>               -Mintel -S ./bin/nomad <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>               <span class=p>|</span> awk <span class=s1>&#39;/hashicorp/{print $1}&#39;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>               <span class=p>|</span> head -1<span class=k>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>objdump --disassemble<span class=o>=</span><span class=s2>&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>        -Mintel -S ./bin/nomad <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>        <span class=p>|</span> awk -F<span class=s1>&#39; |:&#39;</span> <span class=s1>&#39;/ret/{print $2}&#39;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>        <span class=p>|</span> xargs -I % <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>        python3 -c <span class=s2>&#34;print(&#39;uprobe:./bin/nomad:\&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply\&#34;+&#39; + hex(0x% - 0x</span><span class=nv>$base</span><span class=s2>))
+</span></span></span><span class=line><span class=cl><span class=s2>print(&#39;{&#39;)
+</span></span></span><span class=line><span class=cl><span class=s2>print(&#39;  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);&#39;)
+</span></span></span><span class=line><span class=cl><span class=s2>print(&#39;  delete(@start[str(*sarg1)]);&#39;)
+</span></span></span><span class=line><span class=cl><span class=s2>print(&#39;}&#39;)
+</span></span></span><span class=line><span class=cl><span class=s2>print(&#39;&#39;)
+</span></span></span><span class=line><span class=cl><span class=s2>&#34;</span>
+</span></span></code></pre></td></tr></table></div></div><p>这样就得到了下面近300行的庞然大物：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span><span class=lnt>105
+</span><span class=lnt>106
+</span><span class=lnt>107
+</span><span class=lnt>108
+</span><span class=lnt>109
+</span><span class=lnt>110
+</span><span class=lnt>111
+</span><span class=lnt>112
+</span><span class=lnt>113
+</span><span class=lnt>114
+</span><span class=lnt>115
+</span><span class=lnt>116
+</span><span class=lnt>117
+</span><span class=lnt>118
+</span><span class=lnt>119
+</span><span class=lnt>120
+</span><span class=lnt>121
+</span><span class=lnt>122
+</span><span class=lnt>123
+</span><span class=lnt>124
+</span><span class=lnt>125
+</span><span class=lnt>126
+</span><span class=lnt>127
+</span><span class=lnt>128
+</span><span class=lnt>129
+</span><span class=lnt>130
+</span><span class=lnt>131
+</span><span class=lnt>132
+</span><span class=lnt>133
+</span><span class=lnt>134
+</span><span class=lnt>135
+</span><span class=lnt>136
+</span><span class=lnt>137
+</span><span class=lnt>138
+</span><span class=lnt>139
+</span><span class=lnt>140
+</span><span class=lnt>141
+</span><span class=lnt>142
+</span><span class=lnt>143
+</span><span class=lnt>144
+</span><span class=lnt>145
+</span><span class=lnt>146
+</span><span class=lnt>147
+</span><span class=lnt>148
+</span><span class=lnt>149
+</span><span class=lnt>150
+</span><span class=lnt>151
+</span><span class=lnt>152
+</span><span class=lnt>153
+</span><span class=lnt>154
+</span><span class=lnt>155
+</span><span class=lnt>156
+</span><span class=lnt>157
+</span><span class=lnt>158
+</span><span class=lnt>159
+</span><span class=lnt>160
+</span><span class=lnt>161
+</span><span class=lnt>162
+</span><span class=lnt>163
+</span><span class=lnt>164
+</span><span class=lnt>165
+</span><span class=lnt>166
+</span><span class=lnt>167
+</span><span class=lnt>168
+</span><span class=lnt>169
+</span><span class=lnt>170
+</span><span class=lnt>171
+</span><span class=lnt>172
+</span><span class=lnt>173
+</span><span class=lnt>174
+</span><span class=lnt>175
+</span><span class=lnt>176
+</span><span class=lnt>177
+</span><span class=lnt>178
+</span><span class=lnt>179
+</span><span class=lnt>180
+</span><span class=lnt>181
+</span><span class=lnt>182
+</span><span class=lnt>183
+</span><span class=lnt>184
+</span><span class=lnt>185
+</span><span class=lnt>186
+</span><span class=lnt>187
+</span><span class=lnt>188
+</span><span class=lnt>189
+</span><span class=lnt>190
+</span><span class=lnt>191
+</span><span class=lnt>192
+</span><span class=lnt>193
+</span><span class=lnt>194
+</span><span class=lnt>195
+</span><span class=lnt>196
+</span><span class=lnt>197
+</span><span class=lnt>198
+</span><span class=lnt>199
+</span><span class=lnt>200
+</span><span class=lnt>201
+</span><span class=lnt>202
+</span><span class=lnt>203
+</span><span class=lnt>204
+</span><span class=lnt>205
+</span><span class=lnt>206
+</span><span class=lnt>207
+</span><span class=lnt>208
+</span><span class=lnt>209
+</span><span class=lnt>210
+</span><span class=lnt>211
+</span><span class=lnt>212
+</span><span class=lnt>213
+</span><span class=lnt>214
+</span><span class=lnt>215
+</span><span class=lnt>216
+</span><span class=lnt>217
+</span><span class=lnt>218
+</span><span class=lnt>219
+</span><span class=lnt>220
+</span><span class=lnt>221
+</span><span class=lnt>222
+</span><span class=lnt>223
+</span><span class=lnt>224
+</span><span class=lnt>225
+</span><span class=lnt>226
+</span><span class=lnt>227
+</span><span class=lnt>228
+</span><span class=lnt>229
+</span><span class=lnt>230
+</span><span class=lnt>231
+</span><span class=lnt>232
+</span><span class=lnt>233
+</span><span class=lnt>234
+</span><span class=lnt>235
+</span><span class=lnt>236
+</span><span class=lnt>237
+</span><span class=lnt>238
+</span><span class=lnt>239
+</span><span class=lnt>240
+</span><span class=lnt>241
+</span><span class=lnt>242
+</span><span class=lnt>243
+</span><span class=lnt>244
+</span><span class=lnt>245
+</span><span class=lnt>246
+</span><span class=lnt>247
+</span><span class=lnt>248
+</span><span class=lnt>249
+</span><span class=lnt>250
+</span><span class=lnt>251
+</span><span class=lnt>252
+</span><span class=lnt>253
+</span><span class=lnt>254
+</span><span class=lnt>255
+</span><span class=lnt>256
+</span><span class=lnt>257
+</span><span class=lnt>258
+</span><span class=lnt>259
+</span><span class=lnt>260
+</span><span class=lnt>261
+</span><span class=lnt>262
+</span><span class=lnt>263
+</span><span class=lnt>264
+</span><span class=lnt>265
+</span><span class=lnt>266
+</span><span class=lnt>267
+</span><span class=lnt>268
+</span><span class=lnt>269
+</span><span class=lnt>270
+</span><span class=lnt>271
+</span><span class=lnt>272
+</span><span class=lnt>273
+</span><span class=lnt>274
+</span><span class=lnt>275
+</span><span class=lnt>276
+</span><span class=lnt>277
+</span><span class=lnt>278
+</span><span class=lnt>279
+</span><span class=lnt>280
+</span><span class=lnt>281
+</span><span class=lnt>282
+</span><span class=lnt>283
+</span><span class=lnt>284
+</span><span class=lnt>285
+</span><span class=lnt>286
+</span><span class=lnt>287
+</span><span class=lnt>288
+</span><span class=lnt>289
+</span><span class=lnt>290
+</span><span class=lnt>291
+</span><span class=lnt>292
+</span><span class=lnt>293
+</span><span class=lnt>294
+</span><span class=lnt>295
+</span><span class=lnt>296
+</span><span class=lnt>297
+</span><span class=lnt>298
+</span><span class=lnt>299
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#!/usr/bin/env bpftrace
+</span></span><span class=line><span class=cl>/*
+</span></span><span class=line><span class=cl>Get Nomad FSM.Apply latency
+</span></span><span class=line><span class=cl>Note: using sarg with offsets isn&#39;t really concurrency safe and emits a warning
+</span></span><span class=line><span class=cl>*/
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1d3
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x257
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x2f3
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x377
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x3fb
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x49b
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x51b
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x5a0
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x634
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x6b4
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x738
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x7e7
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x86e
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x8ee
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x982
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xa06
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xa8e
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xb27
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xbae
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xc2e
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xcc2
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xd46
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xdce
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xe77
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xefb
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0xf80
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1014
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1098
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x111c
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x11b7
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x123b
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x12c0
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1350
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x13d0
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1450
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x14f7
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1577
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x15f7
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x168f
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x170f
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x178f
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x18ca
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1948
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x19ce
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1a52
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1a6d
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1b07
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1b87
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./bin/nomad:&#34;github.com/hashicorp/nomad/nomad.(*nomadFSM).Apply&#34;+0x1c0e
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>  @usecs = hist((nsecs - @start[str(*sarg1)]) / 1000);
+</span></span><span class=line><span class=cl>  delete(@start[str(*sarg1)]);
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p><code>Go 1.17</code>引入的新的调用规约使得这种情况得到改善，但是仍没有解决<code>uretprobe</code>的问题。相同的<code>swapper</code>代码在<code>Go 1.17</code>上将会反汇编成如下内容：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>(gdb) disas
+</span></span><span class=line><span class=cl>Dump of assembler code for function main.swap:
+</span></span><span class=line><span class=cl>=&gt; 0x000000000047e260 &lt;+0&gt;:     mov    QWORD PTR [rsp+0x8],rax
+</span></span><span class=line><span class=cl>   0x000000000047e265 &lt;+5&gt;:     mov    QWORD PTR [rsp+0x18],rcx
+</span></span><span class=line><span class=cl>   0x000000000047e26a &lt;+10&gt;:    mov    rdx,rax
+</span></span><span class=line><span class=cl>   0x000000000047e26d &lt;+13&gt;:    mov    rax,rcx
+</span></span><span class=line><span class=cl>   0x000000000047e270 &lt;+16&gt;:    mov    rsi,rbx
+</span></span><span class=line><span class=cl>   0x000000000047e273 &lt;+19&gt;:    mov    rbx,rdi
+</span></span><span class=line><span class=cl>   0x000000000047e276 &lt;+22&gt;:    mov    rcx,rdx
+</span></span><span class=line><span class=cl>   0x000000000047e279 &lt;+25&gt;:    mov    rdi,rsi
+</span></span><span class=line><span class=cl>   0x000000000047e27c &lt;+28&gt;:    ret
+</span></span><span class=line><span class=cl>End of assembler dump.
+</span></span></code></pre></td></tr></table></div></div><p>所有的值传递操作都通过寄存器进行了，减少了指针寻址的内容：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>(gdb) x/s $rax
+</span></span><span class=line><span class=cl>0x7fffffffddca: &#34;hello&#34;
+</span></span><span class=line><span class=cl>(gdb) i r $rbx
+</span></span><span class=line><span class=cl>rbx            0x5                 5
+</span></span><span class=line><span class=cl>(gdb) x/s $rcx
+</span></span><span class=line><span class=cl>0x7fffffffddd0: &#34;go&#34;
+</span></span><span class=line><span class=cl>(gdb) i r $rdi
+</span></span><span class=line><span class=cl>rdi            0x2                 2
+</span></span></code></pre></td></tr></table></div></div><p>（我确实不知道为什么第二个参数的长度存储在<code>rdi</code>而非<code>rdx</code>，如果你知道的话，我很乐意知晓下）（译者按：参见<a class=link href=https://liyan-ah.github.io/2023/03/03/golang-1-17-%E5%8F%82%E6%95%B0%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/#more target=_blank rel=noopener>golang-1.17参数调用规约</a>）。</p><p>返回值也放到了寄存器里，这意味着我们可以通过<code>uretprobe</code>来直接获取。我们的<code>bpftrace</code>程序变得简洁了许多：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#!/usr/bin/env bpftrace
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./swapper:&#34;main.swap&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;swapping \&#34;%s\&#34; and \&#34;%s\&#34;\n&#34;,
+</span></span><span class=line><span class=cl>      str(reg(&#34;ax&#34;)), str(reg(&#34;cx&#34;)));
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uretprobe:./swapper:&#34;main.swap&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;results: \&#34;%s\&#34; and \&#34;%s\&#34;\n&#34;,
+</span></span><span class=line><span class=cl>      str(reg(&#34;ax&#34;)), str(reg(&#34;cx&#34;)));
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>$ sudo ./swapper.bt
+</span></span><span class=line><span class=cl>Attaching 2 probes...
+</span></span><span class=line><span class=cl>swapping &#34;hello&#34; and &#34;go&#34;
+</span></span><span class=line><span class=cl>results: &#34;go&#34; and &#34;hello&#34;
+</span></span><span class=line><span class=cl>^C
+</span></span></code></pre></td></tr></table></div></div><p>所以问题是什么？这样不是很好么？目前为止，我们关注的示例都没有需要很多栈空间以至于运行时需要对栈进行调整。而运行时的调整是<code>uretprobe</code>失败的原因。</p><p>看下下面的示例。<code>temp</code>变量从没有逃逸到对上（我们可以通过添加<code>-gcflags -m</code>进行编译以验证这一点），所以我们需要在<code>goroutine</code>栈上申请<code>sizeof(Example)*count</code>大小的空间。如果我们执行<code>./stacker 1000000</code>，将会申请
+多余能够提供的空闲内存，<code>Go</code>的运行时将不得不移动栈空间。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-gdscript3 data-lang=gdscript3><span class=line><span class=cl><span class=n>package</span> <span class=n>main</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>import</span> <span class=p>(</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;fmt&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;os&#34;</span>
+</span></span><span class=line><span class=cl>	<span class=s2>&#34;strconv&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>type</span> <span class=n>Example</span> <span class=n>struct</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>ID</span>   <span class=ne>int</span>
+</span></span><span class=line><span class=cl>	<span class=n>Name</span> <span class=n>string</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>stacker</span><span class=p>(</span><span class=n>count</span> <span class=ne>int</span><span class=p>)</span> <span class=n>string</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=k>var</span> <span class=n>result</span> <span class=ne>int</span>
+</span></span><span class=line><span class=cl>	<span class=k>for</span> <span class=n>i</span> <span class=p>:</span><span class=o>=</span> <span class=mi>0</span><span class=p>;</span> <span class=n>i</span> <span class=o>&lt;</span> <span class=n>count</span><span class=p>;</span> <span class=n>i</span><span class=o>++</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>temp</span> <span class=p>:</span><span class=o>=</span> <span class=n>Example</span><span class=p>{</span><span class=n>ID</span><span class=p>:</span> <span class=n>i</span> <span class=o>*</span> <span class=mi>2</span><span class=p>,</span> <span class=n>Name</span><span class=p>:</span> <span class=n>fmt</span><span class=o>.</span><span class=n>Sprintf</span><span class=p>(</span><span class=s2>&#34;</span><span class=si>%d</span><span class=s2>&#34;</span><span class=p>,</span> <span class=n>result</span><span class=p>)}</span>
+</span></span><span class=line><span class=cl>		<span class=n>result</span> <span class=o>+=</span> <span class=n>temp</span><span class=o>.</span><span class=n>ID</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>s</span> <span class=p>:</span><span class=o>=</span> <span class=n>fmt</span><span class=o>.</span><span class=n>Sprintf</span><span class=p>(</span><span class=s2>&#34;hello: </span><span class=si>%d</span><span class=s2>&#34;</span><span class=p>,</span> <span class=n>result</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=k>return</span> <span class=n>s</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>func</span> <span class=n>main</span><span class=p>()</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>	<span class=n>args</span> <span class=p>:</span><span class=o>=</span> <span class=n>os</span><span class=o>.</span><span class=n>Args</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>len</span><span class=p>(</span><span class=n>args</span><span class=p>)</span> <span class=o>&lt;</span> <span class=mi>2</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>panic</span><span class=p>(</span><span class=s2>&#34;needs 1 arg&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>	<span class=n>count</span><span class=p>,</span> <span class=n>err</span> <span class=p>:</span><span class=o>=</span> <span class=n>strconv</span><span class=o>.</span><span class=n>Atoi</span><span class=p>(</span><span class=n>args</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+</span></span><span class=line><span class=cl>	<span class=k>if</span> <span class=n>err</span> <span class=o>!=</span> <span class=n>nil</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=n>panic</span><span class=p>(</span><span class=s2>&#34;arg needs to be a number&#34;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=n>s</span> <span class=p>:</span><span class=o>=</span> <span class=n>stacker</span><span class=p>(</span><span class=n>count</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>	<span class=n>fmt</span><span class=o>.</span><span class=n>Println</span><span class=p>(</span><span class=n>s</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>这是我们的<code>bpftrace</code>程序：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#!/usr/bin/env bpftrace
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uretprobe:./stacker:&#34;main.stacker&#34;
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;result: \&#34;%s\&#34;\n&#34;, str(reg(&#34;ax&#34;)));
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>如果我们在<code>uretprobe</code>加载的同时，给<code>stacker</code>一个巨大的参数<code>count</code>，程序将会崩溃！</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>$ ./stacker 1000000
+</span></span><span class=line><span class=cl>runtime: unexpected return pc for main.stacker called from 0x7fffffffe000
+</span></span><span class=line><span class=cl>stack: frame={sp:0xc000074ef0, fp:0xc000074f48} stack=[0xc000074000,0xc000075000)
+</span></span><span class=line><span class=cl>...
+</span></span></code></pre></td></tr></table></div></div><p>这里是崩溃时完整的信息：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>  1
+</span><span class=lnt>  2
+</span><span class=lnt>  3
+</span><span class=lnt>  4
+</span><span class=lnt>  5
+</span><span class=lnt>  6
+</span><span class=lnt>  7
+</span><span class=lnt>  8
+</span><span class=lnt>  9
+</span><span class=lnt> 10
+</span><span class=lnt> 11
+</span><span class=lnt> 12
+</span><span class=lnt> 13
+</span><span class=lnt> 14
+</span><span class=lnt> 15
+</span><span class=lnt> 16
+</span><span class=lnt> 17
+</span><span class=lnt> 18
+</span><span class=lnt> 19
+</span><span class=lnt> 20
+</span><span class=lnt> 21
+</span><span class=lnt> 22
+</span><span class=lnt> 23
+</span><span class=lnt> 24
+</span><span class=lnt> 25
+</span><span class=lnt> 26
+</span><span class=lnt> 27
+</span><span class=lnt> 28
+</span><span class=lnt> 29
+</span><span class=lnt> 30
+</span><span class=lnt> 31
+</span><span class=lnt> 32
+</span><span class=lnt> 33
+</span><span class=lnt> 34
+</span><span class=lnt> 35
+</span><span class=lnt> 36
+</span><span class=lnt> 37
+</span><span class=lnt> 38
+</span><span class=lnt> 39
+</span><span class=lnt> 40
+</span><span class=lnt> 41
+</span><span class=lnt> 42
+</span><span class=lnt> 43
+</span><span class=lnt> 44
+</span><span class=lnt> 45
+</span><span class=lnt> 46
+</span><span class=lnt> 47
+</span><span class=lnt> 48
+</span><span class=lnt> 49
+</span><span class=lnt> 50
+</span><span class=lnt> 51
+</span><span class=lnt> 52
+</span><span class=lnt> 53
+</span><span class=lnt> 54
+</span><span class=lnt> 55
+</span><span class=lnt> 56
+</span><span class=lnt> 57
+</span><span class=lnt> 58
+</span><span class=lnt> 59
+</span><span class=lnt> 60
+</span><span class=lnt> 61
+</span><span class=lnt> 62
+</span><span class=lnt> 63
+</span><span class=lnt> 64
+</span><span class=lnt> 65
+</span><span class=lnt> 66
+</span><span class=lnt> 67
+</span><span class=lnt> 68
+</span><span class=lnt> 69
+</span><span class=lnt> 70
+</span><span class=lnt> 71
+</span><span class=lnt> 72
+</span><span class=lnt> 73
+</span><span class=lnt> 74
+</span><span class=lnt> 75
+</span><span class=lnt> 76
+</span><span class=lnt> 77
+</span><span class=lnt> 78
+</span><span class=lnt> 79
+</span><span class=lnt> 80
+</span><span class=lnt> 81
+</span><span class=lnt> 82
+</span><span class=lnt> 83
+</span><span class=lnt> 84
+</span><span class=lnt> 85
+</span><span class=lnt> 86
+</span><span class=lnt> 87
+</span><span class=lnt> 88
+</span><span class=lnt> 89
+</span><span class=lnt> 90
+</span><span class=lnt> 91
+</span><span class=lnt> 92
+</span><span class=lnt> 93
+</span><span class=lnt> 94
+</span><span class=lnt> 95
+</span><span class=lnt> 96
+</span><span class=lnt> 97
+</span><span class=lnt> 98
+</span><span class=lnt> 99
+</span><span class=lnt>100
+</span><span class=lnt>101
+</span><span class=lnt>102
+</span><span class=lnt>103
+</span><span class=lnt>104
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>$ ./stacker 1000000
+</span></span><span class=line><span class=cl>runtime: unexpected return pc for main.stacker called from 0x7fffffffe000
+</span></span><span class=line><span class=cl>stack: frame={sp:0xc000074ef0, fp:0xc000074f48} stack=[0xc000074000,0xc000075000)
+</span></span><span class=line><span class=cl>0x000000c000074df0:  0x0000000000000002  0x000000c000508100
+</span></span><span class=line><span class=cl>0x000000c000074e00:  0x000000c000508000  0x00000000004672e0 &lt;sync.(*Pool).pinSlow·dwrap·3+0x0000000000000000&gt;
+</span></span><span class=line><span class=cl>0x000000c000074e10:  0x0000000000557f58  0x000000c000074e08
+</span></span><span class=line><span class=cl>0x000000c000074e20:  0x0000000000419860 &lt;runtime.gcAssistAlloc.func1+0x0000000000000000&gt;  0x000000c0000001a0
+</span></span><span class=line><span class=cl>0x000000c000074e30:  0x0000000000010000  0x000000c000074eb8
+</span></span><span class=line><span class=cl>0x000000c000074e40:  0x000000000040b305 &lt;runtime.mallocgc+0x0000000000000125&gt;  0x000000c0000001a0
+</span></span><span class=line><span class=cl>0x000000c000074e50:  0x0000000000000002  0x000000c000074e88
+</span></span><span class=line><span class=cl>0x000000c000074e60:  0x000000c000074e88  0x000000000047a06a &lt;fmt.(*pp).free+0x00000000000000ca&gt;
+</span></span><span class=line><span class=cl>0x000000c000074e70:  0x0000000000522100  0x00000000004938e0
+</span></span><span class=line><span class=cl>0x000000c000074e80:  0x000000c00007a820  0x000000c000074ee0
+</span></span><span class=line><span class=cl>0x000000c000074e90:  0x000000000047a245 &lt;fmt.Sprintf+0x0000000000000085&gt;  0x000000c00007a820
+</span></span><span class=line><span class=cl>0x000000c000074ea0:  0x000000c00012b230  0x000000000000000b
+</span></span><span class=line><span class=cl>0x000000c000074eb0:  0x000000c0000001a0  0x000000c000074ee0
+</span></span><span class=line><span class=cl>0x000000c000074ec0:  0x00000000004095e5 &lt;runtime.convT64+0x0000000000000045&gt;  0x0000000000000008
+</span></span><span class=line><span class=cl>0x000000c000074ed0:  0x0000000000487ee0  0x000000c00007a800
+</span></span><span class=line><span class=cl>0x000000c000074ee0:  0x000000c000074f38  0x0000000000480d7b &lt;main.stacker+0x000000000000003b&gt;
+</span></span><span class=line><span class=cl>0x000000c000074ef0: &lt;0x0000000644e0732a  0x0000000000000002
+</span></span><span class=line><span class=cl>0x000000c000074f00:  0x000000c000074f28  0x0000000000000001
+</span></span><span class=line><span class=cl>0x000000c000074f10:  0x0000000000000001  0x0000000644e0732a
+</span></span><span class=line><span class=cl>0x000000c000074f20:  0x00000000000280fa  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074f30:  0x0000000000000000  0x000000c000074f70
+</span></span><span class=line><span class=cl>0x000000c000074f40: !0x00007fffffffe000 &gt;0x00000000000f4240
+</span></span><span class=line><span class=cl>0x000000c000074f50:  0x0000000000000007  0x0000000000415d45 &lt;runtime.gcenable+0x0000000000000085&gt;
+</span></span><span class=line><span class=cl>0x000000c000074f60:  0x00000000004873a0  0x000000c0000001a0
+</span></span><span class=line><span class=cl>0x000000c000074f70:  0x000000c000074fd0  0x0000000000432047 &lt;runtime.main+0x0000000000000227&gt;
+</span></span><span class=line><span class=cl>0x000000c000074f80:  0x000000c000022060  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074f90:  0x0000000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074fa0:  0x0100000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074fb0:  0x000000c0000001a0  0x0000000000432180 &lt;runtime.main.func2+0x0000000000000000&gt;
+</span></span><span class=line><span class=cl>0x000000c000074fc0:  0x000000c000074fa6  0x000000c000074fb8
+</span></span><span class=line><span class=cl>0x000000c000074fd0:  0x0000000000000000  0x000000000045ab01 &lt;runtime.goexit+0x0000000000000001&gt;
+</span></span><span class=line><span class=cl>0x000000c000074fe0:  0x0000000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074ff0:  0x0000000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>fatal error: unknown caller pc
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>runtime stack:
+</span></span><span class=line><span class=cl>runtime.throw({0x4988ba, 0x516760})
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/panic.go:1198 +0x71
+</span></span><span class=line><span class=cl>runtime.gentraceback(0x400, 0x400, 0x80, 0x7f73bbffafff, 0x0, 0x0, 0x7fffffff, 0x7ffc46fe0e28, 0x7f73bbe23200, 0x0)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/traceback.go:274 +0x1956
+</span></span><span class=line><span class=cl>runtime.scanstack(0xc0000001a0, 0xc000030698)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:748 +0x197
+</span></span><span class=line><span class=cl>runtime.markroot.func1()
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:232 +0xb1
+</span></span><span class=line><span class=cl>runtime.markroot(0xc000030698, 0x14)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:205 +0x170
+</span></span><span class=line><span class=cl>runtime.gcDrainN(0xc000030698, 0x10000)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:1134 +0x14b
+</span></span><span class=line><span class=cl>runtime.gcAssistAlloc1(0xc0000001a0, 0xc000074b58)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:537 +0xef
+</span></span><span class=line><span class=cl>runtime.gcAssistAlloc.func1()
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:448 +0x25
+</span></span><span class=line><span class=cl>runtime.systemstack()
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/asm_amd64.s:383 +0x49
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>goroutine 1 [GC assist marking (scan)]:
+</span></span><span class=line><span class=cl>runtime.systemstack_switch()
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/asm_amd64.s:350 fp=0xc000074de8 sp=0xc000074de0 pc=0x458a20
+</span></span><span class=line><span class=cl>runtime.gcAssistAlloc(0xc0000001a0)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/mgcmark.go:447 +0x18b fp=0xc000074e48 sp=0xc000074de8 pc=0x41974b
+</span></span><span class=line><span class=cl>runtime.mallocgc(0x8, 0x487ee0, 0x0)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/malloc.go:959 +0x125 fp=0xc000074ec8 sp=0xc000074e48 pc=0x40b305
+</span></span><span class=line><span class=cl>runtime.convT64(0x644e0732a)
+</span></span><span class=line><span class=cl>        /usr/local/go/src/runtime/iface.go:364 +0x45 fp=0xc000074ef0 sp=0xc000074ec8 pc=0x4095e5
+</span></span><span class=line><span class=cl>runtime: unexpected return pc for main.stacker called from 0x7fffffffe000
+</span></span><span class=line><span class=cl>stack: frame={sp:0xc000074ef0, fp:0xc000074f48} stack=[0xc000074000,0xc000075000)
+</span></span><span class=line><span class=cl>0x000000c000074df0:  0x0000000000000002  0x000000c000508100
+</span></span><span class=line><span class=cl>0x000000c000074e00:  0x000000c000508000  0x00000000004672e0 &lt;sync.(*Pool).pinSlow·dwrap·3+0x0000000000000000&gt;
+</span></span><span class=line><span class=cl>0x000000c000074e10:  0x0000000000557f58  0x000000c000074e08
+</span></span><span class=line><span class=cl>0x000000c000074e20:  0x0000000000419860 &lt;runtime.gcAssistAlloc.func1+0x0000000000000000&gt;  0x000000c0000001a0
+</span></span><span class=line><span class=cl>0x000000c000074e30:  0x0000000000010000  0x000000c000074eb8
+</span></span><span class=line><span class=cl>0x000000c000074e40:  0x000000000040b305 &lt;runtime.mallocgc+0x0000000000000125&gt;  0x000000c0000001a0
+</span></span><span class=line><span class=cl>0x000000c000074e50:  0x0000000000000002  0x000000c000074e88
+</span></span><span class=line><span class=cl>0x000000c000074e60:  0x000000c000074e88  0x000000000047a06a &lt;fmt.(*pp).free+0x00000000000000ca&gt;
+</span></span><span class=line><span class=cl>0x000000c000074e70:  0x0000000000522100  0x00000000004938e0
+</span></span><span class=line><span class=cl>0x000000c000074e80:  0x000000c00007a820  0x000000c000074ee0
+</span></span><span class=line><span class=cl>0x000000c000074e90:  0x000000000047a245 &lt;fmt.Sprintf+0x0000000000000085&gt;  0x000000c00007a820
+</span></span><span class=line><span class=cl>0x000000c000074ea0:  0x000000c00012b230  0x000000000000000b
+</span></span><span class=line><span class=cl>0x000000c000074eb0:  0x000000c0000001a0  0x000000c000074ee0
+</span></span><span class=line><span class=cl>0x000000c000074ec0:  0x00000000004095e5 &lt;runtime.convT64+0x0000000000000045&gt;  0x0000000000000008
+</span></span><span class=line><span class=cl>0x000000c000074ed0:  0x0000000000487ee0  0x000000c00007a800
+</span></span><span class=line><span class=cl>0x000000c000074ee0:  0x000000c000074f38  0x0000000000480d7b &lt;main.stacker+0x000000000000003b&gt;
+</span></span><span class=line><span class=cl>0x000000c000074ef0: &lt;0x0000000644e0732a  0x0000000000000002
+</span></span><span class=line><span class=cl>0x000000c000074f00:  0x000000c000074f28  0x0000000000000001
+</span></span><span class=line><span class=cl>0x000000c000074f10:  0x0000000000000001  0x0000000644e0732a
+</span></span><span class=line><span class=cl>0x000000c000074f20:  0x00000000000280fa  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074f30:  0x0000000000000000  0x000000c000074f70
+</span></span><span class=line><span class=cl>0x000000c000074f40: !0x00007fffffffe000 &gt;0x00000000000f4240
+</span></span><span class=line><span class=cl>0x000000c000074f50:  0x0000000000000007  0x0000000000415d45 &lt;runtime.gcenable+0x0000000000000085&gt;
+</span></span><span class=line><span class=cl>0x000000c000074f60:  0x00000000004873a0  0x000000c0000001a0
+</span></span><span class=line><span class=cl>0x000000c000074f70:  0x000000c000074fd0  0x0000000000432047 &lt;runtime.main+0x0000000000000227&gt;
+</span></span><span class=line><span class=cl>0x000000c000074f80:  0x000000c000022060  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074f90:  0x0000000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074fa0:  0x0100000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074fb0:  0x000000c0000001a0  0x0000000000432180 &lt;runtime.main.func2+0x0000000000000000&gt;
+</span></span><span class=line><span class=cl>0x000000c000074fc0:  0x000000c000074fa6  0x000000c000074fb8
+</span></span><span class=line><span class=cl>0x000000c000074fd0:  0x0000000000000000  0x000000000045ab01 &lt;runtime.goexit+0x0000000000000001&gt;
+</span></span><span class=line><span class=cl>0x000000c000074fe0:  0x0000000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>0x000000c000074ff0:  0x0000000000000000  0x0000000000000000
+</span></span><span class=line><span class=cl>main.stacker(0xf4240)
+</span></span><span class=line><span class=cl>        /home/tim/stacker/main.go:17 +0x3b fp=0xc000074f48 sp=0xc000074ef0 pc=0x480d7b
+</span></span></code></pre></td></tr></table></div></div><p>这样，我们仍然不得不使用之前实践的<code>uprobe+offset</code>的方式来进行<code>uretprobe</code>的实现。<code>bpftrace</code>程序会正常工作，但是地址的偏移量将很大程度上取决于使用的<code>Go</code>版本：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>#!/usr/bin/env bpftrace
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>uprobe:./stacker:&#34;main.stacker&#34;+213
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    printf(&#34;result: \&#34;%s\&#34;\n&#34;, str(reg(&#34;ax&#34;)));
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></td></tr></table></div></div><p>这个问题看起来不会在<code>Go</code>的运行时侧修复，因为可重新分配的栈空间是整个<code>goroutine</code>内存模型的基础。但是通过<code>uprobe</code>以及一点小小的调整，你可以实现<code>uretprobe</code>的功能。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/bpf/>Bpf</a>
+<a href=/tags/golang/>Golang</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentcolor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/%E5%A6%82%E4%BD%95%E8%BF%BD%E8%B8%AAgolang-channel/><div class=article-details><h2 class=article-title>如何追踪golang channel?</h2></div></a></article><article><a href=/p/golang%E5%B8%B8%E8%A7%81%E7%B1%BB%E5%9E%8B%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E7%9A%84ebpf%E8%A7%A3%E6%9E%90/><div class=article-details><h2 class=article-title>golang常见类型作为参数的eBPF解析</h2></div></a></article><article><a href=/p/%E5%9F%BA%E4%BA%8Eebpf%E5%AE%9E%E7%8E%B0%E7%9A%84gls/><div class=article-details><h2 class=article-title>基于ebpf实现的gls</h2></div></a></article><article><a href=/p/bpf-lru_hash_map-%E5%8F%8A-hash_map-%E7%9A%84%E4%BD%BF%E7%94%A8%E5%BC%82%E5%B8%B8/><div class=article-details><h2 class=article-title>BPF LRU_HASH_MAP 及 HASH_MAP 的使用异常</h2></div></a></article><article><a href=/p/go-1.17-%E8%B0%83%E7%94%A8%E8%A7%84%E7%BA%A6/><div class=article-details><h2 class=article-title>go-1.17+ 调用规约</h2></div></a></article></div></div></aside><footer class=site-footer><section class=copyright>&copy;
+2019 -
+2024 李岩</section><section class=powerby>Hello, World!<br>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.25.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>
